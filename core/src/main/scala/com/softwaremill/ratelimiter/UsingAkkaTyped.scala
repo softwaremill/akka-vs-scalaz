@@ -23,29 +23,28 @@ object UsingAkkaTyped {
 
   object AkkaTypedRateLimiter {
     def create(maxRuns: Int, per: FiniteDuration): RateLimiter[Future] = {
-      new AkkaTypedRateLimiter(
-        ActorSystem(rateLimit(RateLimiterData(maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false)), "rate-limiter")
-      )
+      val behavior = Behaviors.withTimers[RateLimiterMsg] { timer =>
+        rateLimit(timer, RateLimiterData(maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false))
+      }
+      new AkkaTypedRateLimiter(ActorSystem(behavior, "rate-limiter"))
     }
 
-    private def rateLimit(data: RateLimiterData): Behavior[RateLimiterMsg] =
-      Behaviors.withTimers { timer =>
-        Behaviors.receiveMessage {
-          case rf: RunFuture[_] =>
-            pruneAndRun(timer, data.copy(waiting = data.waiting.enqueue(rf)))
+    private def rateLimit(timer: TimerScheduler[RateLimiterMsg], data: RateLimiterData): Behavior[RateLimiterMsg] =
+      Behaviors.receiveMessage {
+        case rf: RunFuture[_] =>
+          rateLimit(timer, pruneAndRun(timer, data.copy(waiting = data.waiting.enqueue(rf))))
 
-          case Prune =>
-            pruneAndRun(timer, data.copy(scheduled = false))
-        }
+        case Prune =>
+          rateLimit(timer, pruneAndRun(timer, data.copy(scheduled = false)))
       }
 
-    private def pruneAndRun(timer: TimerScheduler[RateLimiterMsg], data: RateLimiterData): Behavior[RateLimiterMsg] = {
+    private def pruneAndRun(timer: TimerScheduler[RateLimiterMsg], data: RateLimiterData): RateLimiterData = {
       val now = System.currentTimeMillis()
       run(timer, pruneTimestamps(data, now), now)
     }
 
     @tailrec
-    private def run(timer: TimerScheduler[RateLimiterMsg], data: RateLimiterData, now: Long): Behavior[RateLimiterMsg] = {
+    private def run(timer: TimerScheduler[RateLimiterMsg], data: RateLimiterData, now: Long): RateLimiterData = {
       import data._
       if (lastTimestamps.size < maxRuns) {
         waiting.dequeueOption match {
@@ -53,14 +52,14 @@ object UsingAkkaTyped {
             rf.run()
             run(timer, data.copy(lastTimestamps = lastTimestamps.enqueue(now), waiting = w), now)
           case None =>
-            rateLimit(data)
+            data
         }
       } else if (!scheduled) {
         val nextAvailableSlot = perMillis - (now - lastTimestamps.head)
         timer.startSingleTimer((), Prune, nextAvailableSlot.millis)
-        rateLimit(data.copy(scheduled = true))
+        data.copy(scheduled = true)
       } else {
-        rateLimit(data)
+        data
       }
     }
 
