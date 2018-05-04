@@ -2,7 +2,7 @@ package com.softwaremill.ratelimiter
 
 import scalaz._
 import Scalaz._
-import scalaz.ioeffect.{IO, IORef, Promise}
+import scalaz.ioeffect.{Fiber, IO, IORef, Promise}
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
@@ -11,7 +11,7 @@ import scala.concurrent.duration._
 type Actor[E, I, O] = I => IO[E, O]
  */
 object UsingIOEffect {
-  class IOEffectRateLimiter(queue: IOQueue[RateLimiterMsg]) {
+  class IOEffectRateLimiter(queue: IOQueue[RateLimiterMsg], runQueueFiber: Fiber[Nothing, Unit]) {
     def runLimited[E, T](f: IO[E, T]): IO[E, T] = {
       for {
         p <- Promise.make[E, T]
@@ -21,9 +21,9 @@ object UsingIOEffect {
       } yield r
     }
 
-    //private def makePromise(f: IO[E, T])
-
-    def stop(): Unit = {}
+    def stop(): Unit = {
+      runQueueFiber.interrupt(new RuntimeException())
+    }
   }
 
   object IOEffectRateLimiter {
@@ -31,10 +31,10 @@ object UsingIOEffect {
       for {
         queue <- IOQueue.make[Nothing, RateLimiterMsg]
         data <- IORef[Nothing, RateLimiterData](RateLimiterData(maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false))
-        _ <- runQueue(data, queue)
-      } yield new IOEffectRateLimiter(queue)
+        runQueueFiber <- runQueue(data, queue)
+      } yield new IOEffectRateLimiter(queue, runQueueFiber)
 
-    private def runQueue(data: IORef[RateLimiterData], queue: IOQueue[RateLimiterMsg]): IO[Nothing, Unit] = {
+    private def runQueue(data: IORef[RateLimiterData], queue: IOQueue[RateLimiterMsg]): IO[Nothing, Fiber[Nothing, Unit]] = {
       queue.take
         .flatMap {
           case PruneAndRun => IO.point(())
@@ -54,7 +54,6 @@ object UsingIOEffect {
         }
         .forever
         .fork
-        .toUnit
     }
   }
 
