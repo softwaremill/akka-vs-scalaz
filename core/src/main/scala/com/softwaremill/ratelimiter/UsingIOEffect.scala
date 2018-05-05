@@ -37,7 +37,7 @@ object UsingIOEffect {
     private def runQueue(data: IORef[RateLimiterData], queue: IOQueue[RateLimiterMsg]): IO[Nothing, Fiber[Nothing, Unit]] = {
       queue.take
         .flatMap {
-          case PruneAndRun => IO.point(())
+          case PruneAndRun => data.modify(d => d.copy(scheduled = false)).toUnit
           case Schedule(t) => data.modify(d => d.copy(waiting = d.waiting.enqueue(t))).toUnit
         }
         .flatMap { _ =>
@@ -50,7 +50,7 @@ object UsingIOEffect {
               case RunAfter(millis) => IO.sleep[Nothing](millis.millis).flatMap(_ => queue.offer(PruneAndRun))
             }
             .map(_.fork)
-            .sequence
+            .sequence_
         }
         .forever
         .fork

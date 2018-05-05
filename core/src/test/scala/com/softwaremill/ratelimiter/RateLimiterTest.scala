@@ -1,5 +1,6 @@
 package com.softwaremill.ratelimiter
 
+import java.time.LocalTime
 import java.util.concurrent.atomic.AtomicReference
 
 import akka.actor.ActorSystem
@@ -33,7 +34,7 @@ class RateLimiterTest extends FlatSpec with Matchers with BeforeAndAfterAll with
       val complete = new AtomicReference(Vector.empty[Int])
       for (i <- 1 to 7) {
         rateLimiter.runLimited(Future {
-          println(s"${System.currentTimeMillis()} Running $i")
+          println(s"${LocalTime.now()} Running $i")
           complete.updateAndGet(_ :+ i)
         })
       }
@@ -52,7 +53,7 @@ class RateLimiterTest extends FlatSpec with Matchers with BeforeAndAfterAll with
       val complete = new AtomicReference(Vector.empty[Long])
       for (i <- 1 to 20) {
         rateLimiter.runLimited(Future {
-          println(s"${System.currentTimeMillis()} Running $i")
+          println(s"${LocalTime.now()} Running $i")
           complete.updateAndGet(_ :+ System.currentTimeMillis())
         })
         Thread.sleep(100)
