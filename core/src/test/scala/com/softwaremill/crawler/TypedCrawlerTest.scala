@@ -2,8 +2,12 @@ package com.softwaremill.crawler
 
 import akka.testkit.typed.scaladsl.{ActorTestKit, TestProbe}
 import com.softwaremill.crawler.UsingAkkaTyped.Start
+
 import scala.concurrent.duration._
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 class TypedCrawlerTest extends FlatSpec with ActorTestKit with Matchers with BeforeAndAfterAll with CrawlerTestData {
 
@@ -16,7 +20,7 @@ class TypedCrawlerTest extends FlatSpec with ActorTestKit with Matchers with Bef
       val t = timed {
         val probe = TestProbe[Map[String, Int]]()
 
-        val crawler = spawn(new UsingAkkaTyped.Crawler(futureHttp, parseLinks, probe.ref).crawlerBehavior)
+        val crawler = spawn(new UsingAkkaTyped.Crawler(url => Future(http(url)), parseLinks, probe.ref).crawlerBehavior)
         crawler ! Start(startingUrl)
 
         probe.expectMessage(1.minute, expectedCounts)

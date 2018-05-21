@@ -1,14 +1,11 @@
 package com.softwaremill.crawler
 
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext.Implicits.global
-
 trait CrawlerTestData {
 
   trait TestDataSet {
     def expectedCounts: Map[Domain, Int]
     def parseLinks: String => List[Url]
-    def futureHttp: Http[Future]
+    def http: Url => String
     def startingUrl: Url
     def name: String
     def shouldTakeMillisMin: Option[Long] = None
@@ -36,16 +33,15 @@ trait CrawlerTestData {
       case "body41" => Nil
     }
 
-    override val futureHttp: Http[Future] = (url: Url) =>
-      Future(url match {
-        case Url("d1", "p1") => "body11"
-        case Url("d1", "p2") => "body12"
-        case Url("d1", "p3") => "body13"
-        case Url("d1", "p4") => "body14"
-        case Url("d2", "p1") => "body21"
-        case Url("d3", "p1") => "body31"
-        case Url("d4", "p1") => "body41"
-      })
+    override val http: Url => Domain = {
+      case Url("d1", "p1") => "body11"
+      case Url("d1", "p2") => "body12"
+      case Url("d1", "p3") => "body13"
+      case Url("d1", "p4") => "body14"
+      case Url("d2", "p1") => "body21"
+      case Url("d3", "p1") => "body31"
+      case Url("d4", "p1") => "body41"
+    }
 
     override val startingUrl = Url("d1", "p1")
   }
@@ -64,7 +60,7 @@ trait CrawlerTestData {
       if (i < count) List(Url("d1", (i + 1).toString)) else Nil
     }
 
-    override val futureHttp: Http[Future] = (url: Url) => Future(url.path)
+    override val http: Url => String = _.path
 
     override val startingUrl = Url("d1", "0")
   }
@@ -83,7 +79,7 @@ trait CrawlerTestData {
       if (i < count) List(Url((i + 1).toString, "p")) else Nil
     }
 
-    override val futureHttp: Http[Future] = (url: Url) => Future(url.domain)
+    override val http: Url => Domain = _.domain
 
     override val startingUrl = Url("0", "p")
   }
@@ -101,7 +97,7 @@ trait CrawlerTestData {
       links
     }
 
-    override val futureHttp: Http[Future] = (url: Url) => Future(url.domain)
+    override val http: Url => Domain = _.domain
 
     override val startingUrl = Url("d", "1")
   }
@@ -120,10 +116,9 @@ trait CrawlerTestData {
       if (i < count) List(Url("d1", (i + 1).toString)) else Nil
     }
 
-    override val futureHttp: Http[Future] = (url: Url) =>
-      Future {
-        Thread.sleep(100)
-        url.path
+    override val http: Url => String = { url =>
+      Thread.sleep(100)
+      url.path
     }
 
     override val startingUrl = Url("d1", "0")
@@ -146,10 +141,9 @@ trait CrawlerTestData {
       links
     }
 
-    override val futureHttp: Http[Future] = (url: Url) =>
-      Future {
-        Thread.sleep(100)
-        url.domain
+    override val http: Url => String = { url =>
+      Thread.sleep(100)
+      url.domain
     }
 
     override val startingUrl = Url("1", "p")

@@ -5,6 +5,9 @@ import akka.testkit.TestKit
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
+
 class AkkaCrawlerTest
     extends TestKit(ActorSystem("crawler-test"))
     with FlatSpecLike
@@ -22,7 +25,7 @@ class AkkaCrawlerTest
     it should s"crawl a test data set ${testData.name}" in {
       import testData._
       val t = timed {
-        UsingAkka.crawl(startingUrl, futureHttp, parseLinks).futureValue should be(expectedCounts)
+        UsingAkka.crawl(startingUrl, url => Future(http(url)), parseLinks).futureValue should be(expectedCounts)
       }
       shouldTakeMillisMin.foreach(m => t should be >= (m))
       shouldTakeMillisMax.foreach(m => t should be <= (m))

@@ -9,16 +9,6 @@ object UsingIOEffect extends StrictLogging {
 
   def crawler(crawlUrl: Url, http: Http[IO[Throwable, ?]], parseLinks: String => List[Url]): IO[Nothing, Map[Domain, Int]] = {
 
-    case class CrawlerData(referenceCount: Map[Domain, Int],
-                           visitedLinks: Set[Url],
-                           inProgress: Set[Url],
-                           workers: Map[Domain, IOQueue[WorkerMessage]])
-
-    case class WorkerData(
-        urlsPending: Vector[Url],
-        getInProgress: Boolean
-    )
-
     def crawler(crawlerQueue: IOQueue[CrawlerMessage], data: CrawlerData): IO[Nothing, Map[Domain, Int]] = {
       def handleMessage(msg: CrawlerMessage, data: CrawlerData): IO[Nothing, CrawlerData] = msg match {
         case Start(url) =>
@@ -106,14 +96,6 @@ object UsingIOEffect extends StrictLogging {
       }
     }
 
-    sealed trait CrawlerMessage
-    case class Start(url: Url) extends CrawlerMessage
-    case class CrawlResult(url: Url, links: List[Url]) extends CrawlerMessage
-
-    sealed trait WorkerMessage
-    case class Crawl(url: Url) extends WorkerMessage
-    case class HttpGetResult(url: Url, result: Throwable \/ String) extends WorkerMessage
-
     for {
       crawlerQueue <- IOQueue.make[Nothing, CrawlerMessage]
       _ <- crawlerQueue.offer[Nothing](Start(crawlUrl))
@@ -121,6 +103,24 @@ object UsingIOEffect extends StrictLogging {
       // TODO: stop fibers; unlike in Akka, child fibers aren't automatically stopped
     } yield r
   }
+
+  case class CrawlerData(referenceCount: Map[Domain, Int],
+                         visitedLinks: Set[Url],
+                         inProgress: Set[Url],
+                         workers: Map[Domain, IOQueue[WorkerMessage]])
+
+  case class WorkerData(
+      urlsPending: Vector[Url],
+      getInProgress: Boolean
+  )
+
+  sealed trait CrawlerMessage
+  case class Start(url: Url) extends CrawlerMessage
+  case class CrawlResult(url: Url, links: List[Url]) extends CrawlerMessage
+
+  sealed trait WorkerMessage
+  case class Crawl(url: Url) extends WorkerMessage
+  case class HttpGetResult(url: Url, result: Throwable \/ String) extends WorkerMessage
 
   // TODO not yet available
   trait IOQueue[T] {
