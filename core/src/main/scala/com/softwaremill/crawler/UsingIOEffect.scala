@@ -7,19 +7,19 @@ import scalaz.ioeffect.{Fiber, IO, IORef}
 
 object UsingIOEffect extends StrictLogging {
 
-  def crawler(crawlUrl: String, http: Http[IO[Throwable, ?]], getLinks: String => List[String]): IO[Nothing, Map[String, Int]] = {
+  def crawler(crawlUrl: Url, http: Http[IO[Throwable, ?]], parseLinks: String => List[Url]): IO[Nothing, Map[Domain, Int]] = {
 
-    case class CrawlerData(referenceCount: Map[String, Int],
-                           visitedLinks: Set[String],
-                           inProgress: Set[String],
-                           workers: Map[String, IOQueue[WorkerMessage]])
+    case class CrawlerData(referenceCount: Map[Domain, Int],
+                           visitedLinks: Set[Url],
+                           inProgress: Set[Url],
+                           workers: Map[Domain, IOQueue[WorkerMessage]])
 
     case class WorkerData(
-        urlsPending: Vector[String],
+        urlsPending: Vector[Url],
         getInProgress: Boolean
     )
 
-    def crawler(crawlerQueue: IOQueue[CrawlerMessage], data: CrawlerData): IO[Nothing, Map[String, Int]] = {
+    def crawler(crawlerQueue: IOQueue[CrawlerMessage], data: CrawlerData): IO[Nothing, Map[Domain, Int]] = {
       def handleMessage(msg: CrawlerMessage, data: CrawlerData): IO[Nothing, CrawlerData] = msg match {
         case Start(url) =>
           crawlUrl(data, url)
@@ -28,14 +28,14 @@ object UsingIOEffect extends StrictLogging {
           val data2 = data.copy(inProgress = data.inProgress - url)
 
           links.foldlM(data2) { d => link =>
-            val d2 = d.copy(referenceCount = d.referenceCount.updated(link, d.referenceCount.getOrElse(link, 0) + 1))
+            val d2 = d.copy(referenceCount = d.referenceCount.updated(link.domain, d.referenceCount.getOrElse(link.domain, 0) + 1))
             crawlUrl(d2, link)
           }
       }
 
-      def crawlUrl(data: CrawlerData, url: String): IO[Nothing, CrawlerData] = {
+      def crawlUrl(data: CrawlerData, url: Url): IO[Nothing, CrawlerData] = {
         if (!data.visitedLinks.contains(url)) {
-          workerFor(data, url).flatMap {
+          workerFor(data, url.domain).flatMap {
             case (data2, workerQueue) =>
               workerQueue.offer(Crawl(url)).map { _ =>
                 data2.copy(
@@ -47,7 +47,7 @@ object UsingIOEffect extends StrictLogging {
         } else IO.now(data)
       }
 
-      def workerFor(data: CrawlerData, url: String): IO[Nothing, (CrawlerData, IOQueue[WorkerMessage])] = {
+      def workerFor(data: CrawlerData, url: Domain): IO[Nothing, (CrawlerData, IOQueue[WorkerMessage])] = {
         data.workers.get(url) match {
           case None =>
             for {
@@ -80,8 +80,8 @@ object UsingIOEffect extends StrictLogging {
           case HttpGetResult(url, result) =>
             val links = result.fold({ t =>
               logger.error(s"Cannot get contents of $url", t)
-              List.empty[String]
-            }, getLinks)
+              List.empty[Url]
+            }, parseLinks)
 
             crawlerQueue.offer[Nothing](CrawlResult(url, links)).flatMap(_ => startHttpGetIfPossible(data))
         }
@@ -106,13 +106,13 @@ object UsingIOEffect extends StrictLogging {
       }
     }
 
-    sealed trait WorkerMessage
-    case class Crawl(url: String) extends WorkerMessage
-    case class HttpGetResult(url: String, result: Throwable \/ String) extends WorkerMessage
-
     sealed trait CrawlerMessage
-    case class Start(url: String) extends CrawlerMessage
-    case class CrawlResult(url: String, links: List[String]) extends CrawlerMessage
+    case class Start(url: Url) extends CrawlerMessage
+    case class CrawlResult(url: Url, links: List[Url]) extends CrawlerMessage
+
+    sealed trait WorkerMessage
+    case class Crawl(url: Url) extends WorkerMessage
+    case class HttpGetResult(url: Url, result: Throwable \/ String) extends WorkerMessage
 
     for {
       crawlerQueue <- IOQueue.make[Nothing, CrawlerMessage]

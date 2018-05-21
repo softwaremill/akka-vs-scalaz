@@ -11,8 +11,8 @@ class TypedCrawlerTest extends FlatSpec with ActorTestKit with Matchers with Bef
   it should "crawl a test data set" in {
     val probe = TestProbe[Map[String, Int]]()
 
-    val crawler = spawn(UsingAkkaTyped.crawler(futureHttp, getLinks, probe.ref))
-    crawler ! Start("url1")
+    val crawler = spawn(new UsingAkkaTyped.Crawler(futureHttp, parseLinks, probe.ref).crawlerBehavior)
+    crawler ! Start(startingUrl)
 
     probe.expectMessage(expectedCounts)
   }
