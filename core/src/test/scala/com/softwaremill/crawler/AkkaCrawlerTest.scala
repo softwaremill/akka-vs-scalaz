@@ -2,7 +2,7 @@ package com.softwaremill.crawler
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
-import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 class AkkaCrawlerTest
@@ -11,13 +11,21 @@ class AkkaCrawlerTest
     with Matchers
     with BeforeAndAfterAll
     with CrawlerTestData
-    with ScalaFutures {
+    with ScalaFutures
+    with IntegrationPatience {
 
   override def afterAll: Unit = {
     TestKit.shutdownActorSystem(system)
   }
 
-  it should "crawl a test data set" in {
-    UsingAkka.crawl(startingUrl, futureHttp, parseLinks).futureValue should be(expectedCounts)
+  for (testData <- testDataSets) {
+    it should s"crawl a test data set ${testData.name}" in {
+      import testData._
+      val t = timed {
+        UsingAkka.crawl(startingUrl, futureHttp, parseLinks).futureValue should be(expectedCounts)
+      }
+      shouldTakeMillisMin.foreach(m => t should be >= (m))
+      shouldTakeMillisMax.foreach(m => t should be <= (m))
+    }
   }
 }

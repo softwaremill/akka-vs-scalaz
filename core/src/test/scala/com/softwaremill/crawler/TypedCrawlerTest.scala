@@ -2,18 +2,27 @@ package com.softwaremill.crawler
 
 import akka.testkit.typed.scaladsl.{ActorTestKit, TestProbe}
 import com.softwaremill.crawler.UsingAkkaTyped.Start
+import scala.concurrent.duration._
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 
 class TypedCrawlerTest extends FlatSpec with ActorTestKit with Matchers with BeforeAndAfterAll with CrawlerTestData {
 
   override def afterAll(): Unit = shutdownTestKit()
 
-  it should "crawl a test data set" in {
-    val probe = TestProbe[Map[String, Int]]()
+  for (testData <- testDataSets) {
+    it should s"crawl a test data set ${testData.name}" in {
+      import testData._
 
-    val crawler = spawn(new UsingAkkaTyped.Crawler(futureHttp, parseLinks, probe.ref).crawlerBehavior)
-    crawler ! Start(startingUrl)
+      val t = timed {
+        val probe = TestProbe[Map[String, Int]]()
 
-    probe.expectMessage(expectedCounts)
+        val crawler = spawn(new UsingAkkaTyped.Crawler(futureHttp, parseLinks, probe.ref).crawlerBehavior)
+        crawler ! Start(startingUrl)
+
+        probe.expectMessage(1.minute, expectedCounts)
+      }
+      shouldTakeMillisMin.foreach(m => t should be >= (m))
+      shouldTakeMillisMax.foreach(m => t should be <= (m))
+    }
   }
 }
