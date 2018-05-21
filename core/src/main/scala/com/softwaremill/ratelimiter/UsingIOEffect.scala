@@ -34,6 +34,19 @@ object UsingIOEffect {
         runQueueFiber <- runQueue(data, queue)
       } yield new IOEffectRateLimiter(queue, runQueueFiber)
 
+    /*
+    why this works: the IORef is only modified when reading from the queue. Hence, there are no race conditions
+    to modify the ref data.
+
+    General pattern:
+    1 take from queue
+    2 read data
+    3 modify data, potentially writing to this or other queues
+    4 write data
+
+    Unlike in actors, where we have to be cautious not to modify the internal actor state concurrently - e.g. in a
+    future callback, here there's no such possibility.
+     */
     private def runQueue(data: IORef[RateLimiterData], queue: IOQueue[RateLimiterMsg]): IO[Nothing, Fiber[Nothing, Unit]] = {
       queue.take
         .flatMap {

@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import monix.eval.Task
 import org.scalatest.concurrent.{Eventually, IntegrationPatience}
-import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers, SuiteMixin}
 
 import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
@@ -57,5 +57,26 @@ class MonixRateLimiterTest extends FlatSpec with Matchers with BeforeAndAfterAll
         d should be >= (50L)
       }
     }
+  }
+}
+
+import akka.actor.ActorSystem
+import akka.testkit.TestKit
+import org.scalatest.{BeforeAndAfterEach, FlatSpecLike, Suite}
+
+abstract class TestSupport extends TestKit(ActorSystem("MySpec")) with FlatSpecLike with BeforeAndAfterEach {
+
+  override protected def afterEach(): Unit = {
+    super.afterEach()
+    println("AFTER EACH")
+  }
+}
+
+trait OtherBaseSpec extends Suite {}
+
+class MojSpec extends TestSupport with OtherBaseSpec {
+
+  it should "test" in {
+    println("ABC")
   }
 }

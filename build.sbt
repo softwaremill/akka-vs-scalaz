@@ -1,6 +1,6 @@
 lazy val commonSettings = commonSmlBuildSettings ++ ossPublishSettings ++ Seq(
   organization := "com.softwaremill",
-  scalaVersion := "2.12.5"
+  scalaVersion := "2.12.6"
 )
 
 val scalaTest = "org.scalatest" %% "scalatest" % "3.0.5" % "test"
@@ -20,8 +20,10 @@ lazy val core: Project = (project in file("core"))
       "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-testkit" % akkaVersion % Test,
       "com.typesafe.akka" %% "akka-testkit-typed" % akkaVersion % Test,
-      "org.scalaz" %% "scalaz-ioeffect" % "2.1.0",
-      "io.monix" %% "monix" % "3.0.0-RC1"
+      "org.scalaz" %% "scalaz-ioeffect" % "2.2.0",
+      "io.monix" %% "monix" % "3.0.0-RC1",
+      "ch.qos.logback" % "logback-classic" % "1.2.3",
+      "com.typesafe.scala-logging" %% "scala-logging" % "3.9.0",
       scalaTest
     )
   )

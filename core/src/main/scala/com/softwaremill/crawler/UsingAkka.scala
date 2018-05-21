@@ -2,10 +2,11 @@ package com.softwaremill.crawler
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 
+import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
 object UsingAkka {
-  class Crawler(http: FutureHttp, getLinks: String => List[String], reportTo: ActorRef) extends Actor {
+  class Crawler(http: Http[Future], getLinks: String => List[String], reportTo: ActorRef) extends Actor {
     private var referenceCount = Map[String, Int]()
     private var visitedLinks = Set[String]()
     private var inProgress = Set[String]()
@@ -49,7 +50,7 @@ object UsingAkka {
     }
   }
 
-  class Worker(http: FutureHttp, getLinks: String => List[String], master: ActorRef) extends Actor with ActorLogging {
+  class Worker(http: Http[Future], getLinks: String => List[String], master: ActorRef) extends Actor with ActorLogging {
     private var urlsPending: Vector[String] = Vector.empty
     private var getInProgress = false
 
@@ -58,14 +59,14 @@ object UsingAkka {
         urlsPending = urlsPending :+ url
         startGetIfPossible()
 
-      case GetResult(url, Success(body)) =>
+      case HttpGetResult(url, Success(body)) =>
         getInProgress = false
         startGetIfPossible()
 
         val links = getLinks(body)
         master ! CrawlResult(url, links)
 
-      case GetResult(url, Failure(e)) =>
+      case HttpGetResult(url, Failure(e)) =>
         getInProgress = false
         startGetIfPossible()
 
@@ -80,7 +81,7 @@ object UsingAkka {
           urlsPending = tail
 
           import context.dispatcher
-          http.get(url).onComplete(r => self ! GetResult(url, r))
+          http.get(url).onComplete(r => self ! HttpGetResult(url, r))
 
         case _ =>
       }
@@ -89,7 +90,7 @@ object UsingAkka {
 
   sealed trait WorkerMessage
   case class Crawl(url: String) extends WorkerMessage
-  case class GetResult(url: String, result: Try[String]) extends WorkerMessage
+  case class HttpGetResult(url: String, result: Try[String]) extends WorkerMessage
 
   sealed trait CrawlerMessage
   case class Start(url: String) extends CrawlerMessage

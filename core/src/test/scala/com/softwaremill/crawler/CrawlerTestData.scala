@@ -18,7 +18,7 @@ trait CrawlerTestData {
     case "body4" => List("url1")
   }
 
-  val futureHttp: FutureHttp = (url: String) =>
+  val futureHttp: Http[Future] = (url: String) =>
     Future(url match {
       case "url1" => "body1"
       case "url2" => "body2"

@@ -3,10 +3,11 @@ package com.softwaremill.crawler
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 
+import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
 object UsingAkkaTyped {
-  def crawler(http: FutureHttp, getLinks: String => List[String], reportTo: ActorRef[Map[String, Int]]): Behavior[CrawlerMessage] =
+  def crawler(http: Http[Future], getLinks: String => List[String], reportTo: ActorRef[Map[String, Int]]): Behavior[CrawlerMessage] =
     Behaviors.setup[CrawlerMessage] { ctx =>
       case class CrawlerData(referenceCount: Map[String, Int],
                              visitedLinks: Set[String],
@@ -60,29 +61,29 @@ object UsingAkkaTyped {
       def workerReceive(master: ActorRef[CrawlResult], urlsPending: Vector[String], getInProgress: Boolean): Behavior[WorkerMessage] =
         Behaviors.receiveMessage {
           case Crawl(url) =>
-            workerStartGetIfPossible(master, urlsPending :+ url, getInProgress)
+            workerStartHttpGetIfPossible(master, urlsPending :+ url, getInProgress)
 
-          case GetResult(url, Success(body)) =>
+          case HttpGetResult(url, Success(body)) =>
             val links = getLinks(body)
             master ! CrawlResult(url, links)
 
-            workerStartGetIfPossible(master, urlsPending, getInProgress = false)
+            workerStartHttpGetIfPossible(master, urlsPending, getInProgress = false)
 
-          case GetResult(url, Failure(e)) =>
+          case HttpGetResult(url, Failure(e)) =>
             ctx.log.error(s"Cannot get contents of $url", e)
             master ! CrawlResult(url, Nil)
 
-            workerStartGetIfPossible(master, urlsPending, getInProgress = false)
+            workerStartHttpGetIfPossible(master, urlsPending, getInProgress = false)
         }
 
-      def workerStartGetIfPossible(master: ActorRef[CrawlResult],
-                                   urlsPending: Vector[String],
-                                   getInProgress: Boolean): Behavior[WorkerMessage] =
+      def workerStartHttpGetIfPossible(master: ActorRef[CrawlResult],
+                                       urlsPending: Vector[String],
+                                       getInProgress: Boolean): Behavior[WorkerMessage] =
         Behaviors.setup[WorkerMessage] { ctx =>
           urlsPending match {
             case url +: tail if !getInProgress =>
               import ctx.executionContext
-              http.get(url).onComplete(r => ctx.self ! GetResult(url, r))
+              http.get(url).onComplete(r => ctx.self ! HttpGetResult(url, r))
 
               workerReceive(master, tail, getInProgress = true)
 
@@ -96,7 +97,7 @@ object UsingAkkaTyped {
 
   sealed trait WorkerMessage
   case class Crawl(url: String) extends WorkerMessage
-  case class GetResult(url: String, result: Try[String]) extends WorkerMessage
+  case class HttpGetResult(url: String, result: Try[String]) extends WorkerMessage
 
   sealed trait CrawlerMessage
   case class Start(url: String) extends CrawlerMessage
