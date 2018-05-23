@@ -45,6 +45,7 @@ trait SocketTest extends Matchers with Eventually {
     acceptQueue.put(s1)
     acceptQueue.put(s2)
     acceptQueue.put(s3)
+    Thread.sleep(100) // wait for the messages to be handled
 
     s1.receiveNext("msg1")
     eventually {
@@ -58,6 +59,7 @@ trait SocketTest extends Matchers with Eventually {
     val s5 = new TestConnectedSocket
     acceptQueue.put(s4)
     acceptQueue.put(s5)
+    Thread.sleep(100) // wait for the messages to be handled
 
     s4.receiveNext("msg2")
     s4.receiveNext("msg3")
