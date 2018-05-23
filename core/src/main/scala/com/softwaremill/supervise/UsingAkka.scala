@@ -35,9 +35,9 @@ object UsingAkka {
 
     // optional - the default one works too
     override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
-      case _: ActorInitializationException ⇒ Stop
-      case _: ActorKilledException ⇒ Stop
-      case _: DeathPactException ⇒ Stop
+      case _: ActorInitializationException => Stop
+      case _: ActorKilledException         => Stop
+      case _: DeathPactException           => Stop
       case e: Exception =>
         log.info(s"[broadcast] exception in child actor: ${e.getMessage}, restarting")
         Restart
@@ -76,7 +76,8 @@ object UsingAkka {
           currentQueue = Some(queue)
         }
         log.info("[queue] receiving message")
-        queue.take
+        queue
+          .read()
           .pipeTo(self)
           .andThen { case Success(_) => self ! queue } // receive next message
 
@@ -84,7 +85,7 @@ object UsingAkka {
         context.parent ! Received(msg)
 
       case Failure(e) =>
-        log.debug(s"[queue] failure: ${e.getMessage}")
+        log.info(s"[queue] failure: ${e.getMessage}")
         throw e
     }
   }

@@ -14,11 +14,9 @@ class AkkaSuperviseTest
     with IntegrationPatience
     with SuperviseTestData {
 
-  override def afterAll: Unit = {
-    TestKit.shutdownActorSystem(system)
-  }
+  override def afterAll: Unit = TestKit.shutdownActorSystem(system)
 
-  it should s"forward messages and recover from failures" in {
+  it should "forward messages and recover from failures" in {
     val broadcastActor = system.actorOf(Props(new UsingAkka.BroadcastActor(queueConnector)))
     broadcastActor ! UsingAkka.Subscribe(testActor)
 
@@ -29,5 +27,6 @@ class AkkaSuperviseTest
     expectMsg("msg")
 
     connectingWhileClosing.get() should be(false)
+    connectingWithoutClosing.get() should be(false)
   }
 }

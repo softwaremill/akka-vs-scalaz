@@ -3,7 +3,7 @@ package com.softwaremill.supervise
 import scala.concurrent.Future
 
 trait Queue {
-  def take: Future[String]
+  def read(): Future[String]
   def close(): Future[Unit]
 }
 

@@ -17,9 +17,7 @@ class AkkaCrawlerTest
     with ScalaFutures
     with IntegrationPatience {
 
-  override def afterAll: Unit = {
-    TestKit.shutdownActorSystem(system)
-  }
+  override def afterAll: Unit = TestKit.shutdownActorSystem(system)
 
   for (testData <- testDataSets) {
     it should s"crawl a test data set ${testData.name}" in {

@@ -7,16 +7,18 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 trait SuperviseTestData {
   val closing = new AtomicBoolean()
+  val lastClosed = new AtomicBoolean(true)
   val connectingWhileClosing = new AtomicBoolean(false)
+  val connectingWithoutClosing = new AtomicBoolean(false)
   def doClose() = Future {
     closing.set(true)
     Thread.sleep(500)
     closing.set(false)
   }
 
-  val queue1 = new Queue {
+  val queue1: Queue = new Queue {
     val counter = new AtomicInteger()
-    override def take: Future[String] = Future {
+    override def read(): Future[String] = Future {
       Thread.sleep(100)
       counter.incrementAndGet() match {
         case 1 => "msg1"
@@ -25,9 +27,9 @@ trait SuperviseTestData {
     }
     override def close(): Future[Unit] = doClose()
   }
-  val queue2 = new Queue {
+  val queue2: Queue = new Queue {
     val counter = new AtomicInteger()
-    override def take: Future[String] = Future {
+    override def read(): Future[String] = Future {
       Thread.sleep(100)
       counter.incrementAndGet() match {
         case 1 => "msg2"
@@ -37,20 +39,24 @@ trait SuperviseTestData {
     }
     override def close(): Future[Unit] = doClose()
   }
-  val queue3 = new Queue {
-    override def take: Future[String] = Future {
+  val queue3: Queue = new Queue {
+    override def read(): Future[String] = Future {
       Thread.sleep(100)
       "msg"
     }
     override def close(): Future[Unit] = doClose()
   }
 
-  val queueConnector = new QueueConnector {
+  val queueConnector: QueueConnector = new QueueConnector {
     val counter = new AtomicInteger()
     override def connect: Future[Queue] = Future {
       if (closing.get()) {
         connectingWhileClosing.set(true)
         println(s"Connecting while closing! Counter: ${counter.get()}")
+      }
+      if (!lastClosed.get()) {
+        connectingWithoutClosing.set(true)
+        println(s"Reconnecting without closing the previous connection! Counter: ${counter.get()}")
       }
       counter.incrementAndGet() match {
         case 1 => queue1
