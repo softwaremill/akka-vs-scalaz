@@ -4,7 +4,7 @@ import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 
 object UsingAkkaTyped {
-  val Timeout = 1000L
+  val Timeout = 10L
   case object Receive
 
   sealed trait RouterMessage

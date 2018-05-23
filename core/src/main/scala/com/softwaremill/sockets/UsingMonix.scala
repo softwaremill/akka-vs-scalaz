@@ -6,7 +6,7 @@ import monix.execution.misc.AsyncQueue
 import cats.implicits._
 
 object UsingMonix extends StrictLogging {
-  val Timeout = 1000L
+  val Timeout = 10L
 
   sealed trait RouterMessage
   case class Connected(socket: ConnectedSocket) extends RouterMessage

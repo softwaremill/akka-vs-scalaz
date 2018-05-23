@@ -8,7 +8,7 @@ object UsingAkka {
     system.actorOf(Props(new RouterActor(socket)))
   }
 
-  val Timeout = 1000L
+  val Timeout = 10L
   case object Receive
   case class Connected(socket: ConnectedSocket)
   case class Received(socket: ConnectedSocket, msg: String)
