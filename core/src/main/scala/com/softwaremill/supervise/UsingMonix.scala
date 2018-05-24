@@ -2,7 +2,6 @@ package com.softwaremill.supervise
 
 import com.typesafe.scalalogging.StrictLogging
 import monix.eval.Task
-import monix.execution.misc.AsyncQueue
 import monix.reactive.{Consumer, Observable}
 import monix.execution.Scheduler.Implicits.global
 
@@ -17,7 +16,7 @@ object UsingMonix extends StrictLogging {
           logger.info("[broadcast] queue consumer completed, restarting")
       }
       .restartUntil(_ => false)
-      .map(_ => logger.info("[broadcast] finishing"))
+      .map(_ => logger.info("[broadcast] finished"))
   }
 
   def consume(connector: QueueConnector[Task], consumer: Consumer[String, Unit]): Task[Unit] = {
@@ -41,19 +40,5 @@ object UsingMonix extends StrictLogging {
         .map(_ => logger.info("[queue-stop] closed"))
 
     connect.bracket(consumeQueue)(releaseQueue)
-  }
-
-  //
-
-  class MQueue[T](q: AsyncQueue[T]) {
-    def take: Task[T] = {
-      Task.deferFuture(q.poll())
-    }
-    def offer(t: T): Task[Unit] = {
-      Task.eval(q.offer(t))
-    }
-  }
-  object MQueue {
-    def make[T]: MQueue[T] = new MQueue(AsyncQueue.empty)
   }
 }
