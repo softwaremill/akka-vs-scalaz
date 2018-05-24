@@ -1,12 +1,10 @@
 package com.softwaremill.supervise
 
-import scala.concurrent.Future
-
-trait Queue {
-  def read(): Future[String]
-  def close(): Future[Unit]
+trait Queue[F[_]] {
+  def read(): F[String]
+  def close(): F[Unit]
 }
 
-trait QueueConnector {
-  def connect: Future[Queue]
+trait QueueConnector[F[_]] {
+  def connect: F[Queue[F]]
 }

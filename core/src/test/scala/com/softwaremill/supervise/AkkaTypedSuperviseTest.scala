@@ -4,6 +4,9 @@ import akka.testkit.typed.scaladsl.{ActorTestKit, TestProbe}
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
+
 class AkkaTypedSuperviseTest
     extends FlatSpec
     with ActorTestKit
@@ -15,11 +18,16 @@ class AkkaTypedSuperviseTest
 
   override def afterAll(): Unit = shutdownTestKit()
 
+  object WrapInFuture extends Wrap[Future] {
+    override def apply[T](t: => T): Future[T] = Future { t }
+  }
+
   it should "forward messages and recover from failures" in {
+    val testData = createTestData(WrapInFuture)
 
     val probe = TestProbe[String]()
 
-    val broadcast = spawn(UsingAkkaTyped.broadcastBehavior(queueConnector))
+    val broadcast = spawn(UsingAkkaTyped.broadcastBehavior(testData.queueConnector))
     broadcast ! UsingAkkaTyped.Subscribe(probe.ref)
 
     probe.expectMessage("msg1")
@@ -28,7 +36,7 @@ class AkkaTypedSuperviseTest
     probe.expectMessage("msg")
     probe.expectMessage("msg")
 
-    connectingWhileClosing.get() should be(false)
-    connectingWithoutClosing.get() should be(false)
+    testData.connectingWhileClosing.get() should be(false)
+    testData.connectingWithoutClosing.get() should be(false)
   }
 }

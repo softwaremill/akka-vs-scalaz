@@ -2,69 +2,90 @@ package com.softwaremill.supervise
 
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext.Implicits.global
-
 trait SuperviseTestData {
-  val closing = new AtomicBoolean()
-  val lastClosed = new AtomicBoolean(true)
-  val connectingWhileClosing = new AtomicBoolean(false)
-  val connectingWithoutClosing = new AtomicBoolean(false)
-  def doClose() = Future {
-    closing.set(true)
-    Thread.sleep(500)
-    closing.set(false)
+
+  trait TestData[F[_]] {
+    def connectingWhileClosing: AtomicBoolean
+    def connectingWithoutClosing: AtomicBoolean
+
+    def queue1: Queue[F]
+    def queue2: Queue[F]
+    def queue3: Queue[F]
+    def queueConnector: QueueConnector[F]
   }
 
-  val queue1: Queue = new Queue {
-    val counter = new AtomicInteger()
-    override def read(): Future[String] = Future {
-      Thread.sleep(100)
-      counter.incrementAndGet() match {
-        case 1 => "msg1"
-        case _ => throw new RuntimeException("exception 1")
-      }
-    }
-    override def close(): Future[Unit] = doClose()
-  }
-  val queue2: Queue = new Queue {
-    val counter = new AtomicInteger()
-    override def read(): Future[String] = Future {
-      Thread.sleep(100)
-      counter.incrementAndGet() match {
-        case 1 => "msg2"
-        case 2 => "msg3"
-        case _ => throw new RuntimeException("exception 2")
-      }
-    }
-    override def close(): Future[Unit] = doClose()
-  }
-  val queue3: Queue = new Queue {
-    override def read(): Future[String] = Future {
-      Thread.sleep(100)
-      "msg"
-    }
-    override def close(): Future[Unit] = doClose()
+  trait Wrap[F[_]] {
+    def apply[T](t: => T): F[T]
   }
 
-  val queueConnector: QueueConnector = new QueueConnector {
-    val counter = new AtomicInteger()
-    override def connect: Future[Queue] = Future {
-      if (closing.get()) {
-        connectingWhileClosing.set(true)
-        println(s"Connecting while closing! Counter: ${counter.get()}")
+  def createTestData[F[_]](wrap: Wrap[F]): TestData[F] = new TestData[F] {
+    val closing = new AtomicBoolean()
+    val lastClosed = new AtomicBoolean(true)
+    val connectingWhileClosing = new AtomicBoolean(false)
+    val connectingWithoutClosing = new AtomicBoolean(false)
+
+    def doClose() = wrap {
+      closing.set(true)
+      Thread.sleep(500)
+      closing.set(false)
+    }
+
+    val queue1: Queue[F] = new Queue[F] {
+      val counter = new AtomicInteger()
+
+      override def read(): F[String] = wrap {
+        Thread.sleep(100)
+        counter.incrementAndGet() match {
+          case 1 => "msg1"
+          case _ => throw new RuntimeException("exception 1")
+        }
       }
-      if (!lastClosed.get()) {
-        connectingWithoutClosing.set(true)
-        println(s"Reconnecting without closing the previous connection! Counter: ${counter.get()}")
+
+      override def close(): F[Unit] = doClose()
+    }
+    val queue2: Queue[F] = new Queue[F] {
+      val counter = new AtomicInteger()
+
+      override def read(): F[String] = wrap {
+        Thread.sleep(100)
+        counter.incrementAndGet() match {
+          case 1 => "msg2"
+          case 2 => "msg3"
+          case _ => throw new RuntimeException("exception 2")
+        }
       }
-      counter.incrementAndGet() match {
-        case 1 => queue1
-        case 2 => throw new RuntimeException("connect exception 1")
-        case 3 => queue2
-        case 4 => throw new RuntimeException("connect exception 2")
-        case 5 => throw new RuntimeException("connect exception 3")
-        case _ => queue3
+
+      override def close(): F[Unit] = doClose()
+    }
+    val queue3: Queue[F] = new Queue[F] {
+      override def read(): F[String] = wrap {
+        Thread.sleep(100)
+        "msg"
+      }
+
+      override def close(): F[Unit] = doClose()
+    }
+
+    val queueConnector: QueueConnector[F] = new QueueConnector[F] {
+      val counter = new AtomicInteger()
+
+      override def connect: F[Queue[F]] = wrap {
+        if (closing.get()) {
+          connectingWhileClosing.set(true)
+          println(s"Connecting while closing! Counter: ${counter.get()}")
+        }
+        if (!lastClosed.get()) {
+          connectingWithoutClosing.set(true)
+          println(s"Reconnecting without closing the previous connection! Counter: ${counter.get()}")
+        }
+        counter.incrementAndGet() match {
+          case 1 => queue1
+          case 2 => throw new RuntimeException("connect exception 1")
+          case 3 => queue2
+          case 4 => throw new RuntimeException("connect exception 2")
+          case 5 => throw new RuntimeException("connect exception 3")
+          case _ => queue3
+        }
       }
     }
   }

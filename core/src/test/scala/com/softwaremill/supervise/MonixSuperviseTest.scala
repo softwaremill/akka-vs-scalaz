@@ -1,0 +1,45 @@
+package com.softwaremill.supervise
+
+import java.util.concurrent.ConcurrentLinkedQueue
+
+import monix.eval.Task
+import monix.reactive.Consumer
+import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest.concurrent.{Eventually, IntegrationPatience, ScalaFutures}
+import monix.execution.Scheduler.Implicits.global
+
+import scala.collection.JavaConverters._
+
+class MonixSuperviseTest
+    extends FlatSpec
+    with Matchers
+    with BeforeAndAfterAll
+    with ScalaFutures
+    with IntegrationPatience
+    with SuperviseTestData
+    with Eventually {
+
+  object WrapInMonixTask extends Wrap[Task] {
+    override def apply[T](t: => T): Task[T] = Task { t }
+  }
+
+  it should "forward messages and recover from failures" in {
+    val testData = createTestData(WrapInMonixTask)
+
+    val receivedMessages = new ConcurrentLinkedQueue[String]()
+    val consumer = Consumer.foreach(receivedMessages.add)
+
+    val broadcast = UsingMonix.broadcast(testData.queueConnector, consumer).runAsync
+
+    try {
+      eventually {
+        receivedMessages.asScala.toList.slice(0, 5) should be(List("msg1", "msg2", "msg3", "msg", "msg"))
+
+        testData.connectingWhileClosing.get() should be(false)
+        testData.connectingWithoutClosing.get() should be(false)
+      }
+    } finally {
+      broadcast.cancel()
+    }
+  }
+}

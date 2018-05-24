@@ -1,10 +1,9 @@
 package com.softwaremill.supervise
 
-import akka.actor.DeathPactException
 import akka.actor.typed.{ActorRef, Behavior, PostStop, SupervisorStrategy, Terminated}
 import akka.actor.typed.scaladsl.Behaviors
 
-import scala.concurrent.Await
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
@@ -14,7 +13,7 @@ object UsingAkkaTyped {
   case class Subscribe(actor: ActorRef[String]) extends BroadcastActorMessage
   case class Received(msg: String) extends BroadcastActorMessage
 
-  def broadcastBehavior(connector: QueueConnector): Behavior[BroadcastActorMessage] = Behaviors.setup { ctx =>
+  def broadcastBehavior(connector: QueueConnector[Future]): Behavior[BroadcastActorMessage] = Behaviors.setup { ctx =>
     val connectBehavior = Behaviors
       .supervise[Nothing](connectToQueueBehavior(connector, ctx.self))
       .onFailure[RuntimeException](SupervisorStrategy.restart)
@@ -30,8 +29,8 @@ object UsingAkkaTyped {
     handleMessage(Set())
   }
 
-  def connectToQueueBehavior(connector: QueueConnector, msgSink: ActorRef[Received]): Behavior[Nothing] = {
-    Behaviors.setup[Try[Queue]] { ctx =>
+  def connectToQueueBehavior(connector: QueueConnector[Future], msgSink: ActorRef[Received]): Behavior[Nothing] = {
+    Behaviors.setup[Try[Queue[Future]]] { ctx =>
       import ctx.executionContext
 
       ctx.log.info("[queue-start] connecting")
@@ -63,7 +62,7 @@ object UsingAkkaTyped {
   as opposed to normal actors, which are restarted (defaultDecider)
    */
 
-  def consumeQueueBehavior(queue: Queue, msgSink: ActorRef[Received]): Behavior[Try[String]] =
+  def consumeQueueBehavior(queue: Queue[Future], msgSink: ActorRef[Received]): Behavior[Try[String]] =
     Behaviors.setup { ctx =>
       import ctx.executionContext
 

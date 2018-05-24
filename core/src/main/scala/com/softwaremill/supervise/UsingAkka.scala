@@ -15,7 +15,7 @@ import akka.actor.{
 }
 import akka.pattern.pipe
 
-import scala.concurrent.Await
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.util.Success
 
@@ -25,7 +25,7 @@ object UsingAkka {
   case class Received(msg: String)
 
   // error kernel: parent actor is unaffected by connection problems in the child actor
-  class BroadcastActor(connector: QueueConnector) extends Actor with ActorLogging {
+  class BroadcastActor(connector: QueueConnector[Future]) extends Actor with ActorLogging {
     private var consumers: Set[ActorRef] = Set()
 
     override def preStart(): Unit = {
@@ -50,10 +50,10 @@ object UsingAkka {
     }
   }
 
-  class ConsumeQueueActor(connector: QueueConnector) extends Actor with ActorLogging {
+  class ConsumeQueueActor(connector: QueueConnector[Future]) extends Actor with ActorLogging {
     import context.dispatcher
 
-    private var currentQueue: Option[Queue] = None
+    private var currentQueue: Option[Queue[Future]] = None
 
     override def preStart(): Unit = {
       log.info("[queue-start] connecting")
@@ -70,7 +70,7 @@ object UsingAkka {
     }
 
     override def receive: Receive = {
-      case queue: Queue =>
+      case queue: Queue[Future] =>
         if (currentQueue.isEmpty) {
           log.info("[queue-start] connected")
           currentQueue = Some(queue)
