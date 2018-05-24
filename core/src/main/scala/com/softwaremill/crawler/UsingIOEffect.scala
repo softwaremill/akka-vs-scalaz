@@ -3,14 +3,14 @@ package com.softwaremill.crawler
 import com.typesafe.scalalogging.StrictLogging
 import scalaz._
 import Scalaz._
-import scalaz.ioeffect.{Fiber, IO}
+import scalaz.ioeffect.{Fiber, IO, Void}
 
 object UsingIOEffect extends StrictLogging {
 
-  def crawler(crawlUrl: Url, http: Http[IO[Throwable, ?]], parseLinks: String => List[Url]): IO[Nothing, Map[Domain, Int]] = {
+  def crawler(crawlUrl: Url, http: Http[IO[Throwable, ?]], parseLinks: String => List[Url]): IO[Void, Map[Domain, Int]] = {
 
-    def crawler(crawlerQueue: IOQueue[CrawlerMessage], data: CrawlerData): IO[Nothing, Map[Domain, Int]] = {
-      def handleMessage(msg: CrawlerMessage, data: CrawlerData): IO[Nothing, CrawlerData] = msg match {
+    def crawler(crawlerQueue: IOQueue[CrawlerMessage], data: CrawlerData): IO[Void, Map[Domain, Int]] = {
+      def handleMessage(msg: CrawlerMessage, data: CrawlerData): IO[Void, CrawlerData] = msg match {
         case Start(url) =>
           crawlUrl(data, url)
 
@@ -23,7 +23,7 @@ object UsingIOEffect extends StrictLogging {
           }
       }
 
-      def crawlUrl(data: CrawlerData, url: Url): IO[Nothing, CrawlerData] = {
+      def crawlUrl(data: CrawlerData, url: Url): IO[Void, CrawlerData] = {
         if (!data.visitedLinks.contains(url)) {
           workerFor(data, url.domain).flatMap {
             case (data2, workerQueue) =>
@@ -37,11 +37,11 @@ object UsingIOEffect extends StrictLogging {
         } else IO.now(data)
       }
 
-      def workerFor(data: CrawlerData, url: Domain): IO[Nothing, (CrawlerData, IOQueue[Url])] = {
+      def workerFor(data: CrawlerData, url: Domain): IO[Void, (CrawlerData, IOQueue[Url])] = {
         data.workers.get(url) match {
           case None =>
             for {
-              workerQueue <- IOQueue.make[Nothing, Url]
+              workerQueue <- IOQueue.make[Void, Url]
               workerFiber <- worker(workerQueue, crawlerQueue)
             } yield {
               (data.copy(workers = data.workers + (url -> WorkerData(workerQueue, workerFiber))), workerQueue)
@@ -53,7 +53,7 @@ object UsingIOEffect extends StrictLogging {
       crawlerQueue.take.flatMap { msg =>
         handleMessage(msg, data).flatMap { data2 =>
           if (data2.inProgress.isEmpty) {
-            data2.workers.values.map(_.fiber.interrupt(new RuntimeException())).toList.sequence_.map(_ => data2.referenceCount)
+            data2.workers.values.map(_.fiber.interrupt[Void](new RuntimeException())).toList.sequence_.map(_ => data2.referenceCount)
           } else {
             crawler(crawlerQueue, data2)
           }
@@ -61,11 +61,11 @@ object UsingIOEffect extends StrictLogging {
       }
     }
 
-    def worker(workerQueue: IOQueue[Url], crawlerQueue: IOQueue[CrawlerMessage]): IO[Nothing, Fiber[Nothing, Unit]] = {
-      def handleUrl(url: Url): IO[Nothing, Unit] = {
+    def worker(workerQueue: IOQueue[Url], crawlerQueue: IOQueue[CrawlerMessage]): IO[Void, Fiber[Void, Unit]] = {
+      def handleUrl(url: Url): IO[Void, Unit] = {
         http
           .get(url)
-          .attempt[Nothing]
+          .attempt
           .map {
             case -\/(t) =>
               logger.error(s"Cannot get contents of $url", t)
@@ -82,13 +82,13 @@ object UsingIOEffect extends StrictLogging {
     }
 
     for {
-      crawlerQueue <- IOQueue.make[Nothing, CrawlerMessage]
-      _ <- crawlerQueue.offer[Nothing](Start(crawlUrl))
+      crawlerQueue <- IOQueue.make[Void, CrawlerMessage]
+      _ <- crawlerQueue.offer[Void](Start(crawlUrl))
       r <- crawler(crawlerQueue, CrawlerData(Map(), Set(), Set(), Map()))
     } yield r
   }
 
-  case class WorkerData(queue: IOQueue[Url], fiber: Fiber[Nothing, Unit])
+  case class WorkerData(queue: IOQueue[Url], fiber: Fiber[Void, Unit])
   case class CrawlerData(referenceCount: Map[Domain, Int], visitedLinks: Set[Url], inProgress: Set[Url], workers: Map[Domain, WorkerData])
 
   sealed trait CrawlerMessage
@@ -97,7 +97,7 @@ object UsingIOEffect extends StrictLogging {
 
   // TODO not yet available
   trait IOQueue[T] {
-    def take: IO[Nothing, T]
+    def take: IO[Void, T]
     def offer[E](t: T): IO[E, Unit]
   }
   object IOQueue {

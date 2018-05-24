@@ -2,7 +2,7 @@ package com.softwaremill.ratelimiter
 
 import scalaz._
 import Scalaz._
-import scalaz.ioeffect.{Fiber, IO, IORef, Promise}
+import scalaz.ioeffect.{Fiber, IO, IORef, Promise, Void}
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
@@ -11,11 +11,11 @@ import scala.concurrent.duration._
 type Actor[E, I, O] = I => IO[E, O]
  */
 object UsingIOEffect {
-  class IOEffectRateLimiter(queue: IOQueue[RateLimiterMsg], runQueueFiber: Fiber[Nothing, Unit]) {
+  class IOEffectRateLimiter(queue: IOQueue[RateLimiterMsg], runQueueFiber: Fiber[Void, Unit]) {
     def runLimited[E, T](f: IO[E, T]): IO[E, T] = {
       for {
         p <- Promise.make[E, T]
-        toRun = f.flatMap(p.complete).catchAll[Nothing](p.error).fork.toUnit
+        toRun = f.flatMap(p.complete).catchAll[Void](p.error).fork[Void].toUnit
         _ <- queue.offer[E](Schedule(toRun))
         r <- p.get
       } yield r
@@ -27,10 +27,10 @@ object UsingIOEffect {
   }
 
   object IOEffectRateLimiter {
-    def create(maxRuns: Int, per: FiniteDuration): IO[Nothing, IOEffectRateLimiter] =
+    def create(maxRuns: Int, per: FiniteDuration): IO[Void, IOEffectRateLimiter] =
       for {
-        queue <- IOQueue.make[Nothing, RateLimiterMsg]
-        data <- IORef[Nothing, RateLimiterData](RateLimiterData(maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false))
+        queue <- IOQueue.make[Void, RateLimiterMsg]
+        data <- IORef[Void, RateLimiterData](RateLimiterData(maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false))
         runQueueFiber <- runQueue(data, queue)
       } yield new IOEffectRateLimiter(queue, runQueueFiber)
 
@@ -47,7 +47,7 @@ object UsingIOEffect {
     Unlike in actors, where we have to be cautious not to modify the internal actor state concurrently - e.g. in a
     future callback, here there's no such possibility.
      */
-    private def runQueue(data: IORef[RateLimiterData], queue: IOQueue[RateLimiterMsg]): IO[Nothing, Fiber[Nothing, Unit]] = {
+    private def runQueue(data: IORef[RateLimiterData], queue: IOQueue[RateLimiterMsg]): IO[Void, Fiber[Void, Unit]] = {
       queue.take
         .flatMap {
           case PruneAndRun => data.modify(d => d.copy(scheduled = false)).toUnit
@@ -60,9 +60,9 @@ object UsingIOEffect {
           tasks
             .map {
               case Run(run)         => run
-              case RunAfter(millis) => IO.sleep[Nothing](millis.millis).flatMap(_ => queue.offer(PruneAndRun))
+              case RunAfter(millis) => IO.sleep[Void](millis.millis).flatMap(_ => queue.offer(PruneAndRun))
             }
-            .map(_.fork)
+            .map(_.fork[Void])
             .sequence_
         }
         .forever
@@ -73,7 +73,7 @@ object UsingIOEffect {
   private case class RateLimiterData(maxRuns: Int,
                                      perMillis: Long,
                                      lastTimestamps: Queue[Long],
-                                     waiting: Queue[IO[Nothing, Unit]],
+                                     waiting: Queue[IO[Void, Unit]],
                                      scheduled: Boolean) {
 
     def pruneAndRun(now: Long): (List[RateLimiterTask], RateLimiterData) = {
@@ -105,15 +105,15 @@ object UsingIOEffect {
 
   private sealed trait RateLimiterMsg
   private case object PruneAndRun extends RateLimiterMsg
-  private case class Schedule(t: IO[Nothing, Unit]) extends RateLimiterMsg
+  private case class Schedule(t: IO[Void, Unit]) extends RateLimiterMsg
 
   private sealed trait RateLimiterTask
-  private case class Run(run: IO[Nothing, Unit]) extends RateLimiterTask
+  private case class Run(run: IO[Void, Unit]) extends RateLimiterTask
   private case class RunAfter(millis: Long) extends RateLimiterTask
 
   // TODO not yet available
   trait IOQueue[T] {
-    def take: IO[Nothing, T]
+    def take: IO[Void, T]
     def offer[E](t: T): IO[E, Unit]
   }
   object IOQueue {

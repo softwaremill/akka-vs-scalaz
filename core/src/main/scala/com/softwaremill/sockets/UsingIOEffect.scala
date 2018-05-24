@@ -3,7 +3,7 @@ package com.softwaremill.sockets
 import scalaz._
 import Scalaz._
 import com.typesafe.scalalogging.StrictLogging
-import scalaz.ioeffect.{Fiber, IO}
+import scalaz.ioeffect.{Fiber, IO, Void}
 
 object UsingIOEffect extends StrictLogging {
   val Timeout = 1000L
@@ -13,13 +13,13 @@ object UsingIOEffect extends StrictLogging {
   case class Received(socket: ConnectedSocket, msg: String) extends RouterMessage
   case class Terminated(socket: ConnectedSocket) extends RouterMessage
 
-  def router(socket: Socket): IO[Nothing, Unit] = {
+  def router(socket: Socket): IO[Void, Unit] = {
     case class ConnectedSocketData(sendFiber: Fiber[Unit, Unit], receiveFiber: Fiber[Unit, Unit], sendQueue: IOQueue[String])
-    def handleMessage(queue: IOQueue[RouterMessage], socketSendQueues: Map[ConnectedSocket, ConnectedSocketData]): IO[Nothing, Unit] = {
+    def handleMessage(queue: IOQueue[RouterMessage], socketSendQueues: Map[ConnectedSocket, ConnectedSocketData]): IO[Void, Unit] = {
       queue.take.flatMap {
         case Connected(connectedSocket) =>
           for {
-            sendQueue <- IOQueue.make[Nothing, String]
+            sendQueue <- IOQueue.make[Void, String]
             sendFiber <- clientSend(connectedSocket, queue, sendQueue)
             receiveFiber <- clientReceive(connectedSocket, queue)
             _ <- handleMessage(queue, socketSendQueues + (connectedSocket -> ConnectedSocketData(sendFiber, receiveFiber, sendQueue)))
@@ -27,11 +27,11 @@ object UsingIOEffect extends StrictLogging {
 
         case Terminated(connectedSocket) =>
           val cancelFibers = socketSendQueues.get(connectedSocket) match {
-            case None => IO.unit
+            case None => IO.unit[Void]
             case Some(ConnectedSocketData(sendFiber, receiveFiber, _)) =>
               for {
-                _ <- sendFiber.interrupt[Nothing](new RuntimeException())
-                _ <- receiveFiber.interrupt[Nothing](new RuntimeException())
+                _ <- sendFiber.interrupt[Void](new RuntimeException())
+                _ <- receiveFiber.interrupt[Void](new RuntimeException())
               } yield ()
           }
           cancelFibers.flatMap(_ => handleMessage(queue, socketSendQueues - connectedSocket))
@@ -41,9 +41,9 @@ object UsingIOEffect extends StrictLogging {
             {
               case (connectedSocket, ConnectedSocketData(_, _, sendQueue)) =>
                 if (connectedSocket != receivedFrom) {
-                  sendQueue.offer(msg)
+                  sendQueue.offer[Void](msg)
                 } else {
-                  IO.unit
+                  IO.unit[Void]
                 }
             }
           }
@@ -53,15 +53,15 @@ object UsingIOEffect extends StrictLogging {
     }
 
     for {
-      queue <- IOQueue.make[Nothing, RouterMessage]
+      queue <- IOQueue.make[Void, RouterMessage]
       _ <- socketAccept(socket, queue)
       _ <- handleMessage(queue, Map())
     } yield ()
   }
 
-  def socketAccept(socket: Socket, parent: IOQueue[RouterMessage]): IO[Nothing, Fiber[Nothing, Unit]] =
+  def socketAccept(socket: Socket, parent: IOQueue[RouterMessage]): IO[Void, Fiber[Void, Unit]] =
     IO.syncThrowable(socket.accept(Timeout))
-      .attempt[Nothing]
+      .attempt[Void]
       .flatMap {
         case -\/(e) =>
           logger.error(s"Exception when listening on a socket", e)
@@ -72,7 +72,7 @@ object UsingIOEffect extends StrictLogging {
       .forever
       .fork
 
-  def clientSend(socket: ConnectedSocket, parent: IOQueue[RouterMessage], sendQueue: IOQueue[String]): IO[Nothing, Fiber[Unit, Unit]] =
+  def clientSend(socket: ConnectedSocket, parent: IOQueue[RouterMessage], sendQueue: IOQueue[String]): IO[Void, Fiber[Unit, Unit]] =
     sendQueue.take
       .widen[Throwable]
       .flatMap(msg => IO.syncThrowable(socket.send(msg)))
@@ -83,11 +83,12 @@ object UsingIOEffect extends StrictLogging {
         case -\/(e) =>
           logger.error(s"Exception when sending to socket", e)
           IO.unit
+        case \/-(_) => IO.unit
       }
       .forever
       .fork
 
-  def clientReceive(socket: ConnectedSocket, parent: IOQueue[RouterMessage]): IO[Nothing, Fiber[Unit, Unit]] =
+  def clientReceive(socket: ConnectedSocket, parent: IOQueue[RouterMessage]): IO[Void, Fiber[Unit, Unit]] =
     IO.syncThrowable(socket.receive(Timeout))
       .attempt[Unit]
       .flatMap {
@@ -104,7 +105,7 @@ object UsingIOEffect extends StrictLogging {
 
   // TODO not yet available
   trait IOQueue[T] {
-    def take: IO[Nothing, T]
+    def take: IO[Void, T]
     def offer[E](t: T): IO[E, Unit]
   }
   object IOQueue {

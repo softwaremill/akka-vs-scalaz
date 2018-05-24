@@ -41,13 +41,4 @@ object UsingIOEffect extends StrictLogging {
 
     connect.bracket(releaseQueue)(consumeQueue)
   }
-
-  // TODO not yet available
-  trait IOQueue[T] {
-    def take: IO[Nothing, T]
-    def offer[E](t: T): IO[E, Unit]
-  }
-  object IOQueue {
-    def make[E, T]: IO[E, IOQueue[T]] = ???
-  }
 }
