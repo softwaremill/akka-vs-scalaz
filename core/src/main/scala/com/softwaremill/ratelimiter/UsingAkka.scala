@@ -1,9 +1,8 @@
 package com.softwaremill.ratelimiter
 
-import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable, PoisonPill, Props}
-import com.softwaremill.Clock
+import akka.actor.{Actor, ActorRef, ActorSystem, PoisonPill, Props}
+import com.softwaremill.ratelimiter.RateLimiterQueue._
 
-import scala.annotation.tailrec
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, Promise}
@@ -12,7 +11,7 @@ object UsingAkka {
   class AkkaRateLimiter(rateLimiterActor: ActorRef) extends RateLimiter[Future] {
     def runLimited[T](f: => Future[T])(implicit ec: ExecutionContext): Future[T] = {
       val p = Promise[T]
-      rateLimiterActor ! RunFuture(() => f, p)
+      rateLimiterActor ! LazyFuture(() => f.andThen { case r => p.complete(r) }.map(_ => ()))
       p.future
     }
 
@@ -32,59 +31,30 @@ object UsingAkka {
 
     import context.dispatcher
 
-    private val perMillis = per.toMillis
-
-    private var lastTimestamps = Queue.empty[Long]
-    private var waiting = Queue.empty[RunFuture[_]]
-    private var scheduledPruning = Option.empty[Cancellable]
+    private var queue = RateLimiterQueue[LazyFuture](maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false)
 
     override def receive: Receive = {
-      case rf: RunFuture[_] =>
-        waiting = waiting.enqueue(rf)
+      case lf: LazyFuture[Unit] =>
+        queue = queue.copy(waiting = queue.waiting.enqueue(lf))
         pruneAndRun()
 
-      case Prune =>
-        scheduledPruning = None
+      case PruneAndRun =>
+        queue = queue.copy(scheduled = false)
         pruneAndRun()
     }
 
     private def pruneAndRun(): Unit = {
       val now = System.currentTimeMillis()
-      pruneTimestamps(now)
 
-      @tailrec
-      def loop(): Unit = {
-        if (lastTimestamps.size < maxRuns) {
-          waiting.dequeueOption match {
-            case Some((rf, w)) =>
-              waiting = w
-
-              rf.run()
-              lastTimestamps = lastTimestamps.enqueue(now)
-
-              loop()
-            case None =>
-          }
-        } else if (scheduledPruning.isEmpty) {
-          val nextAvailableSlot = perMillis - (now - lastTimestamps.head)
-          scheduledPruning = Some(context.system.scheduler.scheduleOnce(nextAvailableSlot.millis, self, Prune))
-        }
+      val (tasks, queue2) = queue.pruneAndRun(now)
+      queue = queue2
+      tasks.foreach {
+        case Run(LazyFuture(f)) => f()
+        case RunAfter(millis)   => context.system.scheduler.scheduleOnce(millis.millis, self, PruneAndRun)
       }
-
-      loop()
-    }
-
-    private def pruneTimestamps(now: Long): Unit = {
-      val threshold = now - perMillis
-      lastTimestamps = lastTimestamps.filter(_ >= threshold)
     }
   }
 
-  private case class RunFuture[T](t: () => Future[T], p: Promise[T])(implicit ec: ExecutionContext) {
-    def run(): Unit = {
-      t().onComplete(r => p.complete(r))
-    }
-  }
-
-  private case object Prune
+  private case class LazyFuture[T](t: () => Future[T])
+  private case object PruneAndRun
 }
