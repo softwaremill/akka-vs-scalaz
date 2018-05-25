@@ -35,11 +35,11 @@ object UsingAkka {
 
     override def receive: Receive = {
       case lf: LazyFuture[Unit] =>
-        queue = queue.copy(waiting = queue.waiting.enqueue(lf))
+        queue = queue.enqueue(lf)
         pruneAndRun()
 
       case PruneAndRun =>
-        queue = queue.copy(scheduled = false)
+        queue = queue.notScheduled
         pruneAndRun()
     }
 

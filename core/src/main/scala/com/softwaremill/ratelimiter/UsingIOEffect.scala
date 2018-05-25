@@ -54,8 +54,8 @@ object UsingIOEffect {
     private def runQueue(data: IORef[IORateLimiterQueue], queue: IOQueue[RateLimiterMsg]): IO[Void, Fiber[Void, Unit]] = {
       queue.take
         .flatMap {
-          case PruneAndRun => data.modify(d => d.copy(scheduled = false)).toUnit
-          case Schedule(t) => data.modify(d => d.copy(waiting = d.waiting.enqueue(t))).toUnit
+          case PruneAndRun => data.modify(_.notScheduled).toUnit
+          case Schedule(t) => data.modify(_.enqueue(t)).toUnit
         }
         .flatMap { _ =>
           data.modifyFold(_.pruneAndRun(System.currentTimeMillis()))

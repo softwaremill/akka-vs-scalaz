@@ -31,11 +31,8 @@ object UsingAkkaTyped {
 
     private def rateLimit(timer: TimerScheduler[RateLimiterMsg], data: RateLimiterQueue[LazyFuture]): Behavior[RateLimiterMsg] =
       Behaviors.receiveMessage {
-        case lf: LazyFuture[Unit] =>
-          rateLimit(timer, pruneAndRun(timer, data.copy(waiting = data.waiting.enqueue(lf))))
-
-        case PruneAndRun =>
-          rateLimit(timer, pruneAndRun(timer, data.copy(scheduled = false)))
+        case lf: LazyFuture[Unit] => rateLimit(timer, pruneAndRun(timer, data.enqueue(lf)))
+        case PruneAndRun => rateLimit(timer, pruneAndRun(timer, data.notScheduled))
       }
 
     private def pruneAndRun(timer: TimerScheduler[RateLimiterMsg], data: RateLimiterQueue[LazyFuture]): RateLimiterQueue[LazyFuture] = {

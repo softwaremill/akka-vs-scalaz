@@ -9,6 +9,10 @@ case class RateLimiterQueue[F[_]](maxRuns: Int, perMillis: Long, lastTimestamps:
     pruneTimestamps(now).run(now)
   }
 
+  def enqueue(f: F[Unit]): RateLimiterQueue[F] = copy(waiting = waiting.enqueue(f))
+
+  def notScheduled: RateLimiterQueue[F] = copy(scheduled = false)
+
   private def run(now: Long): (List[RateLimiterTask[F]], RateLimiterQueue[F]) = {
     if (lastTimestamps.size < maxRuns) {
       waiting.dequeueOption match {

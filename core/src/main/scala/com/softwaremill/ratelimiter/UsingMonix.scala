@@ -37,11 +37,11 @@ object UsingMonix {
           case PruneAndRun =>
             // we can do take+put here safely because that's the only place where data is accessed
             data.take
-              .map(d => d.copy(scheduled = false))
+              .map(d => d.notScheduled)
               .flatMap(data.put)
           case Schedule(t) =>
             data.take
-              .map(d => d.copy(waiting = d.waiting.enqueue(t)))
+              .map(_.enqueue(t))
               .flatMap(data.put)
         }
         .flatMap { _ =>
