@@ -7,6 +7,8 @@ import scalaz.ioeffect.{Fiber, IO, IORef, Promise, Void}
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
 
+import RateLimiterQueue._
+
 /*
 type Actor[E, I, O] = I => IO[E, O]
  */
@@ -27,10 +29,12 @@ object UsingIOEffect {
   }
 
   object IOEffectRateLimiter {
+    type IORateLimiterQueue = RateLimiterQueue[IO[Void, ?]]
+
     def create(maxRuns: Int, per: FiniteDuration): IO[Void, IOEffectRateLimiter] =
       for {
         queue <- IOQueue.make[Void, RateLimiterMsg]
-        data <- IORef[Void, RateLimiterData](RateLimiterData(maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false))
+        data <- IORef[Void, IORateLimiterQueue](RateLimiterQueue(maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false))
         runQueueFiber <- runQueue(data, queue)
       } yield new IOEffectRateLimiter(queue, runQueueFiber)
 
@@ -47,7 +51,7 @@ object UsingIOEffect {
     Unlike in actors, where we have to be cautious not to modify the internal actor state concurrently - e.g. in a
     future callback, here there's no such possibility.
      */
-    private def runQueue(data: IORef[RateLimiterData], queue: IOQueue[RateLimiterMsg]): IO[Void, Fiber[Void, Unit]] = {
+    private def runQueue(data: IORef[IORateLimiterQueue], queue: IOQueue[RateLimiterMsg]): IO[Void, Fiber[Void, Unit]] = {
       queue.take
         .flatMap {
           case PruneAndRun => data.modify(d => d.copy(scheduled = false)).toUnit
@@ -70,46 +74,9 @@ object UsingIOEffect {
     }
   }
 
-  private case class RateLimiterData(maxRuns: Int,
-                                     perMillis: Long,
-                                     lastTimestamps: Queue[Long],
-                                     waiting: Queue[IO[Void, Unit]],
-                                     scheduled: Boolean) {
-
-    def pruneAndRun(now: Long): (List[RateLimiterTask], RateLimiterData) = {
-      pruneTimestamps(now).run(now)
-    }
-
-    private def run(now: Long): (List[RateLimiterTask], RateLimiterData) = {
-      if (lastTimestamps.size < maxRuns) {
-        waiting.dequeueOption match {
-          case Some((io, w)) =>
-            val (tasks, next) = copy(lastTimestamps = lastTimestamps.enqueue(now), waiting = w).run(now)
-            (Run(io) :: tasks, next)
-          case None =>
-            (Nil, this)
-        }
-      } else if (!scheduled) {
-        val nextAvailableSlot = perMillis - (now - lastTimestamps.head)
-        (List(RunAfter(nextAvailableSlot)), this.copy(scheduled = true))
-      } else {
-        (Nil, this)
-      }
-    }
-
-    private def pruneTimestamps(now: Long): RateLimiterData = {
-      val threshold = now - perMillis
-      copy(lastTimestamps = lastTimestamps.filter(_ >= threshold))
-    }
-  }
-
   private sealed trait RateLimiterMsg
   private case object PruneAndRun extends RateLimiterMsg
   private case class Schedule(t: IO[Void, Unit]) extends RateLimiterMsg
-
-  private sealed trait RateLimiterTask
-  private case class Run(run: IO[Void, Unit]) extends RateLimiterTask
-  private case class RunAfter(millis: Long) extends RateLimiterTask
 
   // TODO not yet available
   trait IOQueue[T] {

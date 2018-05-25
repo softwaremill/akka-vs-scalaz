@@ -6,6 +6,7 @@ import monix.eval.{MVar, Task}
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
 import cats.implicits._
+import RateLimiterQueue._
 
 object UsingMonix {
   class MonixRateLimiter(queue: MVar[RateLimiterMsg], queueFiber: Fiber[Task, Unit]) {
@@ -26,11 +27,11 @@ object UsingMonix {
     def create(maxRuns: Int, per: FiniteDuration): Task[MonixRateLimiter] =
       for {
         queue <- MVar.empty[RateLimiterMsg]
-        data <- MVar(RateLimiterData(maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false))
+        data <- MVar(RateLimiterQueue[Task](maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false))
         runQueueFiber <- runQueue(data, queue)
       } yield new MonixRateLimiter(queue, runQueueFiber)
 
-    private def runQueue(data: MVar[RateLimiterData], queue: MVar[RateLimiterMsg]): Task[Fiber[Task, Unit]] = {
+    private def runQueue(data: MVar[RateLimiterQueue[Task]], queue: MVar[RateLimiterMsg]): Task[Fiber[Task, Unit]] = {
       queue.take
         .flatMap {
           case PruneAndRun =>
@@ -63,44 +64,7 @@ object UsingMonix {
     }
   }
 
-  private case class RateLimiterData(maxRuns: Int,
-                                     perMillis: Long,
-                                     lastTimestamps: Queue[Long],
-                                     waiting: Queue[Task[Unit]],
-                                     scheduled: Boolean) {
-
-    def pruneAndRun(now: Long): (List[RateLimiterTask], RateLimiterData) = {
-      pruneTimestamps(now).run(now)
-    }
-
-    private def run(now: Long): (List[RateLimiterTask], RateLimiterData) = {
-      if (lastTimestamps.size < maxRuns) {
-        waiting.dequeueOption match {
-          case Some((io, w)) =>
-            val (tasks, next) = copy(lastTimestamps = lastTimestamps.enqueue(now), waiting = w).run(now)
-            (Run(io) :: tasks, next)
-          case None =>
-            (Nil, this)
-        }
-      } else if (!scheduled) {
-        val nextAvailableSlot = perMillis - (now - lastTimestamps.head)
-        (List(RunAfter(nextAvailableSlot)), this.copy(scheduled = true))
-      } else {
-        (Nil, this)
-      }
-    }
-
-    private def pruneTimestamps(now: Long): RateLimiterData = {
-      val threshold = now - perMillis
-      copy(lastTimestamps = lastTimestamps.filter(_ >= threshold))
-    }
-  }
-
   private sealed trait RateLimiterMsg
   private case object PruneAndRun extends RateLimiterMsg
   private case class Schedule(t: Task[Unit]) extends RateLimiterMsg
-
-  private sealed trait RateLimiterTask
-  private case class Run(run: Task[Unit]) extends RateLimiterTask
-  private case class RunAfter(millis: Long) extends RateLimiterTask
 }
