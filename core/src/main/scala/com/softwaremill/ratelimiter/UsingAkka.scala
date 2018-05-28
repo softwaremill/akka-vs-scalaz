@@ -8,7 +8,7 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, Promise}
 
 object UsingAkka {
-  class AkkaRateLimiter(rateLimiterActor: ActorRef) extends RateLimiter[Future] {
+  class AkkaRateLimiter(rateLimiterActor: ActorRef) {
     def runLimited[T](f: => Future[T])(implicit ec: ExecutionContext): Future[T] = {
       val p = Promise[T]
       rateLimiterActor ! LazyFuture(() => f.andThen { case r => p.complete(r) }.map(_ => ()))
@@ -21,7 +21,7 @@ object UsingAkka {
   }
 
   object AkkaRateLimiter {
-    def create(maxRuns: Int, per: FiniteDuration)(implicit actorSystem: ActorSystem): RateLimiter[Future] = {
+    def create(maxRuns: Int, per: FiniteDuration)(implicit actorSystem: ActorSystem): AkkaRateLimiter = {
       val rateLimiterActor = actorSystem.actorOf(Props(new RateLimiterActor(maxRuns, per)))
       new AkkaRateLimiter(rateLimiterActor)
     }

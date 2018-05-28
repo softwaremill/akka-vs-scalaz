@@ -23,7 +23,7 @@ object UsingIOEffect {
       } yield r
     }
 
-    def stop(): Unit = {
+    def stop(): IO[Nothing, Unit] = {
       runQueueFiber.interrupt(new RuntimeException())
     }
   }

@@ -3,40 +3,21 @@ package com.softwaremill.ratelimiter
 import java.time.LocalTime
 import java.util.concurrent.atomic.AtomicReference
 
-import akka.actor.ActorSystem
-import com.softwaremill.ratelimiter.UsingAkka.AkkaRateLimiter
-import com.softwaremill.ratelimiter.UsingAkkaTyped.AkkaTypedRateLimiter
-import org.scalatest.concurrent.{Eventually, IntegrationPatience}
-import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest.concurrent.Eventually
+import org.scalatest.{FlatSpec, Matchers}
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.Implicits.global
 
-class RateLimiterTest extends FlatSpec with Matchers with BeforeAndAfterAll with Eventually with IntegrationPatience {
-
-  var system: ActorSystem = _
-
-  override protected def beforeAll(): Unit = {
-    system = ActorSystem("akka-rate-limiter-test")
-  }
-
-  override protected def afterAll(): Unit = {
-    system.terminate()
-  }
-
-  doTest("AkkaRateLimiter", AkkaRateLimiter.create(_, _)(system))
-  doTest("AkkaTypedRateLimiter", AkkaTypedRateLimiter.create)
-
-  def doTest(name: String, create: (Int, FiniteDuration) => RateLimiter[Future]): Unit = {
+trait RateLimiterTest extends FlatSpec with Matchers with Eventually {
+  def doTest[F[_], RL](name: String, create: Int => FiniteDuration => RateLimiter): Unit = {
     name should "rate limit futures scheduled upfront" in {
-      val rateLimiter = create(2, 1.second)
+      val rateLimiter = create(2)(1.second)
       val complete = new AtomicReference(Vector.empty[Int])
       for (i <- 1 to 7) {
-        rateLimiter.runLimited(Future {
+        rateLimiter.runLimited {
           println(s"${LocalTime.now()} Running $i")
           complete.updateAndGet(_ :+ i)
-        })
+        }
       }
 
       eventually {
@@ -49,13 +30,13 @@ class RateLimiterTest extends FlatSpec with Matchers with BeforeAndAfterAll with
     }
 
     name should "maintain the rate limit in all time windows" in {
-      val rateLimiter = create(10, 1.second)
+      val rateLimiter = create(10)(1.second)
       val complete = new AtomicReference(Vector.empty[Long])
       for (i <- 1 to 20) {
-        rateLimiter.runLimited(Future {
+        rateLimiter.runLimited {
           println(s"${LocalTime.now()} Running $i")
           complete.updateAndGet(_ :+ System.currentTimeMillis())
-        })
+        }
         Thread.sleep(100)
       }
 
@@ -71,5 +52,9 @@ class RateLimiterTest extends FlatSpec with Matchers with BeforeAndAfterAll with
         }
       }
     }
+  }
+
+  trait RateLimiter {
+    def runLimited(f: => Unit): Unit
   }
 }
