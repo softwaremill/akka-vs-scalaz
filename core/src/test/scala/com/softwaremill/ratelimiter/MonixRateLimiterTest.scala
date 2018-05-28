@@ -15,6 +15,7 @@ class MonixRateLimiterTest extends RateLimiterTest with IntegrationPatience {
         new RateLimiter {
           private val rl = UsingMonix.MonixRateLimiter.create(maxRuns, per).runSyncUnsafe(Duration.Inf)
           override def runLimited(f: => Unit): Unit = rl.runLimited(Task { f }).runAsync
+          override def stop(): Unit = rl.stop().runSyncUnsafe(Duration.Inf)
     }
   )
 }

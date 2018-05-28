@@ -3,21 +3,26 @@ package com.softwaremill.ratelimiter
 import akka.actor.typed.scaladsl.{Behaviors, TimerScheduler}
 import akka.actor.typed.{ActorSystem, Behavior, Terminated}
 import com.softwaremill.ratelimiter.RateLimiterQueue.{Run, RunAfter}
+import com.typesafe.scalalogging.StrictLogging
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, Promise}
 
 object UsingAkkaTyped {
-  class AkkaTypedRateLimiter(actorSystem: ActorSystem[RateLimiterMsg]) {
+  class AkkaTypedRateLimiter(actorSystem: ActorSystem[RateLimiterMsg]) extends StrictLogging {
     def runLimited[T](f: => Future[T])(implicit ec: ExecutionContext): Future[T] = {
       val p = Promise[T]
       actorSystem ! LazyFuture(() => f.andThen { case r => p.complete(r) }.map(_ => ()))
       p.future
     }
 
-    def stop(): Future[Terminated] = {
-      actorSystem.terminate()
+    def stop(): Future[Unit] = {
+      import actorSystem.executionContext
+      actorSystem.terminate().map { _ =>
+        // the actor system's logger is no longer available
+        logger.info("Stopping rate limiter")
+      }
     }
   }
 

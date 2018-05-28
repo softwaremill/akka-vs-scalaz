@@ -27,6 +27,8 @@ trait RateLimiterTest extends FlatSpec with Matchers with Eventually {
         complete.get().slice(4, 6).toSet should be(Set(5, 6))
         complete.get().slice(6, 7).toSet should be(Set(7))
       }
+
+      rateLimiter.stop()
     }
 
     name should "maintain the rate limit in all time windows" in {
@@ -51,10 +53,13 @@ trait RateLimiterTest extends FlatSpec with Matchers with Eventually {
           d should be >= (50L)
         }
       }
+
+      rateLimiter.stop()
     }
   }
 
   trait RateLimiter {
     def runLimited(f: => Unit): Unit
+    def stop(): Unit
   }
 }

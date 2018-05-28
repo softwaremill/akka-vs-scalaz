@@ -7,6 +7,7 @@ import scala.collection.immutable.Queue
 import scala.concurrent.duration._
 import cats.implicits._
 import RateLimiterQueue._
+import com.typesafe.scalalogging.StrictLogging
 
 object UsingMonix {
   class MonixRateLimiter(queue: MVar[RateLimiterMsg], queueFiber: Fiber[Task, Unit]) {
@@ -23,7 +24,7 @@ object UsingMonix {
     }
   }
 
-  object MonixRateLimiter {
+  object MonixRateLimiter extends StrictLogging {
     def create(maxRuns: Int, per: FiniteDuration): Task[MonixRateLimiter] =
       for {
         queue <- MVar.empty[RateLimiterMsg]
@@ -60,6 +61,7 @@ object UsingMonix {
             .sequence_
         }
         .restartUntil(_ => false)
+        .doOnCancel(Task.eval(logger.info("Stopping rate limiter")))
         .fork
     }
   }

@@ -6,8 +6,8 @@ import scalaz.ioeffect.{Fiber, IO, IORef, Promise, Void}
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
-
 import RateLimiterQueue._
+import com.typesafe.scalalogging.StrictLogging
 
 /*
 type Actor[E, I, O] = I => IO[E, O]
@@ -24,11 +24,11 @@ object UsingIOEffect {
     }
 
     def stop(): IO[Nothing, Unit] = {
-      runQueueFiber.interrupt(new RuntimeException())
+      runQueueFiber.interrupt(new StopException())
     }
   }
 
-  object IOEffectRateLimiter {
+  object IOEffectRateLimiter extends StrictLogging {
     type IORateLimiterQueue = RateLimiterQueue[IO[Void, ?]]
 
     def create(maxRuns: Int, per: FiniteDuration): IO[Void, IOEffectRateLimiter] =
@@ -70,6 +70,9 @@ object UsingIOEffect {
             .sequence_
         }
         .forever
+        .catchSome {
+          case _: StopException => IO.sync(logger.info("Stopping rate limiter"))
+        }
         .fork
     }
   }
@@ -77,6 +80,8 @@ object UsingIOEffect {
   private sealed trait RateLimiterMsg
   private case object PruneAndRun extends RateLimiterMsg
   private case class Schedule(t: IO[Void, Unit]) extends RateLimiterMsg
+
+  private class StopException extends RuntimeException
 
   // TODO not yet available
   trait IOQueue[T] {

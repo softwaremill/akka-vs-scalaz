@@ -27,6 +27,7 @@ class AkkaRateLimiterTest extends RateLimiterTest with BeforeAndAfterAll with In
         new RateLimiter {
           private val rl = AkkaRateLimiter.create(maxRuns, per)(system)
           override def runLimited(f: => Unit): Unit = rl.runLimited(Future { f })
+          override def stop(): Unit = rl.stop()
     }
   )
 }

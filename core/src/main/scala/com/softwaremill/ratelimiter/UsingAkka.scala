@@ -1,6 +1,6 @@
 package com.softwaremill.ratelimiter
 
-import akka.actor.{Actor, ActorRef, ActorSystem, PoisonPill, Props}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, PoisonPill, Props}
 import com.softwaremill.ratelimiter.RateLimiterQueue._
 
 import scala.collection.immutable.Queue
@@ -27,7 +27,7 @@ object UsingAkka {
     }
   }
 
-  private class RateLimiterActor(maxRuns: Int, per: FiniteDuration) extends Actor {
+  private class RateLimiterActor(maxRuns: Int, per: FiniteDuration) extends Actor with ActorLogging {
 
     import context.dispatcher
 
@@ -52,6 +52,10 @@ object UsingAkka {
         case Run(LazyFuture(f)) => f()
         case RunAfter(millis)   => context.system.scheduler.scheduleOnce(millis.millis, self, PruneAndRun)
       }
+    }
+
+    override def postStop(): Unit = {
+      log.info("Stopping rate limiter")
     }
   }
 
