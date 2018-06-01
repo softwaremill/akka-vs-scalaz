@@ -8,9 +8,9 @@ import cats.implicits._
 
 object UsingMonix extends StrictLogging {
 
-  def crawler(crawlUrl: Url, http: Http[Task], parseLinks: String => List[Url]): Task[Map[Domain, Int]] = {
+  def crawler(crawlUrl: Url, http: Http[Task], parseLinks: String => List[Url]): Task[Map[Host, Int]] = {
 
-    def crawler(crawlerQueue: MQueue[CrawlerMessage], data: CrawlerData): Task[Map[Domain, Int]] = {
+    def crawler(crawlerQueue: MQueue[CrawlerMessage], data: CrawlerData): Task[Map[Host, Int]] = {
       def handleMessage(msg: CrawlerMessage, data: CrawlerData): Task[CrawlerData] = msg match {
         case Start(url) =>
           crawlUrl(data, url)
@@ -20,14 +20,14 @@ object UsingMonix extends StrictLogging {
 
           links.foldM(data2) {
             case (d, link) =>
-              val d2 = d.copy(referenceCount = d.referenceCount.updated(link.domain, d.referenceCount.getOrElse(link.domain, 0) + 1))
+              val d2 = d.copy(referenceCount = d.referenceCount.updated(link.host, d.referenceCount.getOrElse(link.host, 0) + 1))
               crawlUrl(d2, link)
           }
       }
 
       def crawlUrl(data: CrawlerData, url: Url): Task[CrawlerData] = {
         if (!data.visitedLinks.contains(url)) {
-          workerFor(data, url.domain).flatMap {
+          workerFor(data, url.host).flatMap {
             case (data2, workerQueue) =>
               workerQueue.offer(url).map { _ =>
                 data2.copy(
@@ -39,7 +39,7 @@ object UsingMonix extends StrictLogging {
         } else Task.now(data)
       }
 
-      def workerFor(data: CrawlerData, url: Domain): Task[(CrawlerData, MQueue[Url])] = {
+      def workerFor(data: CrawlerData, url: Host): Task[(CrawlerData, MQueue[Url])] = {
         data.workers.get(url) match {
           case None =>
             val workerQueue = MQueue.make[Url]
@@ -89,9 +89,13 @@ object UsingMonix extends StrictLogging {
   }
 
   case class WorkerData(queue: MQueue[Url], fiber: Fiber[Unit])
-  case class CrawlerData(referenceCount: Map[Domain, Int], visitedLinks: Set[Url], inProgress: Set[Url], workers: Map[Domain, WorkerData])
+  case class CrawlerData(referenceCount: Map[Host, Int], visitedLinks: Set[Url], inProgress: Set[Url], workers: Map[Host, WorkerData])
 
   sealed trait CrawlerMessage
+
+  /**
+    * Start the crawling process for the given URL. Should be sent only once.
+    */
   case class Start(url: Url) extends CrawlerMessage
   case class CrawlResult(url: Url, links: List[Url]) extends CrawlerMessage
 

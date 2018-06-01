@@ -7,17 +7,17 @@ import scala.util.{Failure, Success, Try}
 
 object UsingAkka {
 
-  def crawl(startUrl: Url, http: Http[Future], parseLinks: String => List[Url])(implicit system: ActorSystem): Future[Map[Domain, Int]] = {
-    val result = Promise[Map[Domain, Int]]()
+  def crawl(startUrl: Url, http: Http[Future], parseLinks: String => List[Url])(implicit system: ActorSystem): Future[Map[Host, Int]] = {
+    val result = Promise[Map[Host, Int]]()
     system.actorOf(Props(new Crawler(http, parseLinks, result))) ! Start(startUrl)
     result.future
   }
 
-  class Crawler(http: Http[Future], parseLinks: String => List[Url], result: Promise[Map[Domain, Int]]) extends Actor {
-    private var referenceCount = Map[Domain, Int]()
+  class Crawler(http: Http[Future], parseLinks: String => List[Url], result: Promise[Map[Host, Int]]) extends Actor {
+    private var referenceCount = Map[Host, Int]()
     private var visitedLinks = Set[Url]()
     private var inProgress = Set[Url]()
-    private var workers = Map[Domain, ActorRef]()
+    private var workers = Map[Host, ActorRef]()
 
     override def receive: Receive = {
       case Start(start) =>
@@ -28,7 +28,7 @@ object UsingAkka {
 
         links.foreach { link =>
           crawlUrl(link)
-          referenceCount = referenceCount.updated(link.domain, referenceCount.getOrElse(link.domain, 0) + 1)
+          referenceCount = referenceCount.updated(link.host, referenceCount.getOrElse(link.host, 0) + 1)
         }
 
         if (inProgress.isEmpty) {
@@ -41,15 +41,15 @@ object UsingAkka {
       if (!visitedLinks.contains(url)) {
         visitedLinks += url
         inProgress += url
-        actorFor(url.domain) ! Crawl(url)
+        actorFor(url.host) ! Crawl(url)
       }
     }
 
-    private def actorFor(domain: Domain): ActorRef = {
-      workers.get(domain) match {
+    private def actorFor(host: Host): ActorRef = {
+      workers.get(host) match {
         case None =>
           val workerActor = context.actorOf(Props(new Worker(http, parseLinks, self)))
-          workers += domain -> workerActor
+          workers += host -> workerActor
           workerActor
 
         case Some(ar) => ar
@@ -96,6 +96,10 @@ object UsingAkka {
   }
 
   sealed trait CrawlerMessage
+
+  /**
+    * Start the crawling process for the given URL. Should be sent only once.
+    */
   case class Start(url: Url) extends CrawlerMessage
   case class CrawlResult(url: Url, links: List[Url]) extends CrawlerMessage
 

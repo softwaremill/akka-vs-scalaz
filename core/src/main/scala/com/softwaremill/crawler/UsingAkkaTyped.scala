@@ -8,7 +8,7 @@ import scala.util.{Failure, Success, Try}
 
 object UsingAkkaTyped {
 
-  class Crawler(http: Http[Future], parseLinks: String => List[Url], reportTo: ActorRef[Map[Domain, Int]]) {
+  class Crawler(http: Http[Future], parseLinks: String => List[Url], reportTo: ActorRef[Map[Host, Int]]) {
 
     def crawlerBehavior: Behavior[CrawlerMessage] = Behaviors.setup[CrawlerMessage] { ctx =>
       def receive(data: CrawlerData): Behavior[CrawlerMessage] = Behaviors.receiveMessage {
@@ -20,7 +20,7 @@ object UsingAkkaTyped {
 
           val data3 = links.foldLeft(data2) {
             case (d, link) =>
-              val d2 = d.copy(referenceCount = d.referenceCount.updated(link.domain, d.referenceCount.getOrElse(link.domain, 0) + 1))
+              val d2 = d.copy(referenceCount = d.referenceCount.updated(link.host, d.referenceCount.getOrElse(link.host, 0) + 1))
               crawlUrl(d2, link)
           }
 
@@ -34,7 +34,7 @@ object UsingAkkaTyped {
 
       def crawlUrl(data: CrawlerData, url: Url): CrawlerData = {
         if (!data.visitedLinks.contains(url)) {
-          val (data2, worker) = workerFor(data, url.domain)
+          val (data2, worker) = workerFor(data, url.host)
           worker ! Crawl(url)
           data2.copy(
             visitedLinks = data.visitedLinks + url,
@@ -43,11 +43,11 @@ object UsingAkkaTyped {
         } else data
       }
 
-      def workerFor(data: CrawlerData, domain: Domain): (CrawlerData, ActorRef[WorkerMessage]) = {
-        data.workers.get(domain) match {
+      def workerFor(data: CrawlerData, host: Host): (CrawlerData, ActorRef[WorkerMessage]) = {
+        data.workers.get(host) match {
           case None =>
-            val workerActor = ctx.spawn(workerBehavior(ctx.self), s"worker-$domain")
-            (data.copy(workers = data.workers + (domain -> workerActor)), workerActor)
+            val workerActor = ctx.spawn(workerBehavior(ctx.self), s"worker-$host")
+            (data.copy(workers = data.workers + (host -> workerActor)), workerActor)
 
           case Some(ar) => (data, ar)
         }
@@ -91,12 +91,16 @@ object UsingAkkaTyped {
     }
   }
 
-  case class CrawlerData(referenceCount: Map[Domain, Int],
+  case class CrawlerData(referenceCount: Map[Host, Int],
                          visitedLinks: Set[Url],
                          inProgress: Set[Url],
-                         workers: Map[Domain, ActorRef[WorkerMessage]])
+                         workers: Map[Host, ActorRef[WorkerMessage]])
 
   sealed trait CrawlerMessage
+
+  /**
+    * Start the crawling process for the given URL. Should be sent only once.
+    */
   case class Start(url: Url) extends CrawlerMessage
   case class CrawlResult(url: Url, links: List[Url]) extends CrawlerMessage
 
