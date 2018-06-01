@@ -29,24 +29,24 @@ object UsingAkkaTyped {
   object AkkaTypedRateLimiter {
     def create(maxRuns: Int, per: FiniteDuration): AkkaTypedRateLimiter = {
       val behavior = Behaviors.withTimers[RateLimiterMsg] { timer =>
-        rateLimit(timer, RateLimiterQueue(maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false))
+        rateLimit(timer, RateLimiterQueue(maxRuns, per.toMillis))
       }
       new AkkaTypedRateLimiter(ActorSystem(behavior, "rate-limiter"))
     }
 
     private def rateLimit(timer: TimerScheduler[RateLimiterMsg], data: RateLimiterQueue[LazyFuture]): Behavior[RateLimiterMsg] =
       Behaviors.receiveMessage {
-        case lf: LazyFuture[Unit] => rateLimit(timer, pruneAndRun(timer, data.enqueue(lf)))
-        case PruneAndRun          => rateLimit(timer, pruneAndRun(timer, data.notScheduled))
+        case lf: LazyFuture[Unit] => rateLimit(timer, runQueue(timer, data.enqueue(lf)))
+        case ScheduledRunQueue    => rateLimit(timer, runQueue(timer, data.notScheduled))
       }
 
-    private def pruneAndRun(timer: TimerScheduler[RateLimiterMsg], data: RateLimiterQueue[LazyFuture]): RateLimiterQueue[LazyFuture] = {
+    private def runQueue(timer: TimerScheduler[RateLimiterMsg], data: RateLimiterQueue[LazyFuture]): RateLimiterQueue[LazyFuture] = {
       val now = System.currentTimeMillis()
 
-      val (tasks, data2) = data.pruneAndRun(now)
+      val (tasks, data2) = data.run(now)
       tasks.foreach {
         case Run(LazyFuture(f)) => f()
-        case RunAfter(millis)   => timer.startSingleTimer((), PruneAndRun, millis.millis)
+        case RunAfter(millis)   => timer.startSingleTimer((), ScheduledRunQueue, millis.millis)
       }
 
       data2
@@ -55,5 +55,5 @@ object UsingAkkaTyped {
 
   private sealed trait RateLimiterMsg
   private case class LazyFuture[T](t: () => Future[T]) extends RateLimiterMsg
-  private case object PruneAndRun extends RateLimiterMsg
+  private case object ScheduledRunQueue extends RateLimiterMsg
 }

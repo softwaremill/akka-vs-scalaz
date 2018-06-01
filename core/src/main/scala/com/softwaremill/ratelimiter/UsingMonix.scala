@@ -28,14 +28,14 @@ object UsingMonix {
     def create(maxRuns: Int, per: FiniteDuration): Task[MonixRateLimiter] =
       for {
         queue <- MVar.empty[RateLimiterMsg]
-        data <- MVar(RateLimiterQueue[Task](maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false))
+        data <- MVar(RateLimiterQueue[Task](maxRuns, per.toMillis))
         runQueueFiber <- runQueue(data, queue)
       } yield new MonixRateLimiter(queue, runQueueFiber)
 
     private def runQueue(data: MVar[RateLimiterQueue[Task]], queue: MVar[RateLimiterMsg]): Task[Fiber[Task, Unit]] = {
       queue.take
         .flatMap {
-          case PruneAndRun =>
+          case ScheduledRunQueue =>
             // we can do take+put here safely because that's the only place where data is accessed
             data.take
               .map(d => d.notScheduled)
@@ -46,7 +46,7 @@ object UsingMonix {
               .flatMap(data.put)
         }
         .flatMap { _ =>
-          data.take.map(_.pruneAndRun(System.currentTimeMillis())).flatMap {
+          data.take.map(_.run(System.currentTimeMillis())).flatMap {
             case (tasks, d) =>
               data.put(d).map(_ => tasks)
           }
@@ -55,7 +55,7 @@ object UsingMonix {
           tasks
             .map {
               case Run(run)         => run
-              case RunAfter(millis) => Task.sleep(millis.millis).flatMap(_ => queue.put(PruneAndRun))
+              case RunAfter(millis) => Task.sleep(millis.millis).flatMap(_ => queue.put(ScheduledRunQueue))
             }
             .map(_.forkAndForget)
             .sequence_
@@ -67,6 +67,6 @@ object UsingMonix {
   }
 
   private sealed trait RateLimiterMsg
-  private case object PruneAndRun extends RateLimiterMsg
+  private case object ScheduledRunQueue extends RateLimiterMsg
   private case class Schedule(t: Task[Unit]) extends RateLimiterMsg
 }

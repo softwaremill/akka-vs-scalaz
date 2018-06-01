@@ -31,26 +31,26 @@ object UsingAkka {
 
     import context.dispatcher
 
-    private var queue = RateLimiterQueue[LazyFuture](maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false)
+    private var queue = RateLimiterQueue[LazyFuture](maxRuns, per.toMillis)
 
     override def receive: Receive = {
       case lf: LazyFuture[Unit] =>
         queue = queue.enqueue(lf)
-        pruneAndRun()
+        runQueue()
 
-      case PruneAndRun =>
+      case ScheduledRunQueue =>
         queue = queue.notScheduled
-        pruneAndRun()
+        runQueue()
     }
 
-    private def pruneAndRun(): Unit = {
+    private def runQueue(): Unit = {
       val now = System.currentTimeMillis()
 
-      val (tasks, queue2) = queue.pruneAndRun(now)
+      val (tasks, queue2) = queue.run(now)
       queue = queue2
       tasks.foreach {
         case Run(LazyFuture(f)) => f()
-        case RunAfter(millis)   => context.system.scheduler.scheduleOnce(millis.millis, self, PruneAndRun)
+        case RunAfter(millis)   => context.system.scheduler.scheduleOnce(millis.millis, self, ScheduledRunQueue)
       }
     }
 
@@ -60,5 +60,5 @@ object UsingAkka {
   }
 
   private case class LazyFuture[T](t: () => Future[T])
-  private case object PruneAndRun
+  private case object ScheduledRunQueue
 }

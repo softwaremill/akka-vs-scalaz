@@ -9,9 +9,6 @@ import scala.concurrent.duration._
 import RateLimiterQueue._
 import com.typesafe.scalalogging.StrictLogging
 
-/*
-type Actor[E, I, O] = I => IO[E, O]
- */
 object UsingIOEffect {
   class IOEffectRateLimiter(queue: IOQueue[RateLimiterMsg], runQueueFiber: Fiber[Void, Unit]) {
     def runLimited[E, T](f: IO[E, T]): IO[E, T] = {
@@ -34,7 +31,7 @@ object UsingIOEffect {
     def create(maxRuns: Int, per: FiniteDuration): IO[Void, IOEffectRateLimiter] =
       for {
         queue <- IOQueue.make[Void, RateLimiterMsg]
-        data <- IORef[Void, IORateLimiterQueue](RateLimiterQueue(maxRuns, per.toMillis, Queue.empty, Queue.empty, scheduled = false))
+        data <- IORef[Void, IORateLimiterQueue](RateLimiterQueue(maxRuns, per.toMillis))
         runQueueFiber <- runQueue(data, queue)
       } yield new IOEffectRateLimiter(queue, runQueueFiber)
 
@@ -54,31 +51,29 @@ object UsingIOEffect {
     private def runQueue(data: IORef[IORateLimiterQueue], queue: IOQueue[RateLimiterMsg]): IO[Void, Fiber[Void, Unit]] = {
       queue.take
         .flatMap {
-          case PruneAndRun => data.modify(_.notScheduled).toUnit
-          case Schedule(t) => data.modify(_.enqueue(t)).toUnit
+          case ScheduledRunQueue => data.modify(_.notScheduled).toUnit
+          case Schedule(t)       => data.modify(_.enqueue(t)).toUnit
         }
         .flatMap { _ =>
-          data.modifyFold(_.pruneAndRun(System.currentTimeMillis()))
+          data.modifyFold(_.run(System.currentTimeMillis()))
         }
         .flatMap { tasks =>
           tasks
             .map {
               case Run(run)         => run
-              case RunAfter(millis) => IO.sleep[Void](millis.millis).flatMap(_ => queue.offer(PruneAndRun))
+              case RunAfter(millis) => IO.sleep[Void](millis.millis).flatMap(_ => queue.offer(ScheduledRunQueue))
             }
             .map(_.fork[Void])
             .sequence_
         }
         .forever
-        .catchSome {
-          case _: StopException => IO.sync(logger.info("Stopping rate limiter"))
-        }
+        .ensuring(IO.sync(logger.info("Stopping rate limiter")))
         .fork
     }
   }
 
   private sealed trait RateLimiterMsg
-  private case object PruneAndRun extends RateLimiterMsg
+  private case object ScheduledRunQueue extends RateLimiterMsg
   private case class Schedule(t: IO[Void, Unit]) extends RateLimiterMsg
 
   private class StopException extends RuntimeException
