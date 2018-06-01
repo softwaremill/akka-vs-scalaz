@@ -12,7 +12,7 @@ import RateLimiterQueue._
   *
   * @tparam F Type of computations. Should be a lazy wrapper, so that computations can be enqueued for later execution.
   */
-case class RateLimiterQueue[F[_]](maxRuns: Int, perMillis: Long, lastTimestamps: Queue[Long], waiting: Queue[F[Unit]], scheduled: Boolean) {
+case class RateLimiterQueue[F](maxRuns: Int, perMillis: Long, lastTimestamps: Queue[Long], waiting: Queue[F], scheduled: Boolean) {
 
   /**
     * Given the timestamp, obtain a list of task which might include running a computation or scheduling a `run`
@@ -25,7 +25,7 @@ case class RateLimiterQueue[F[_]](maxRuns: Int, perMillis: Long, lastTimestamps:
   /**
     * Add a request to the queue. Doesn't run any pending requests.
     */
-  def enqueue(f: F[Unit]): RateLimiterQueue[F] = copy(waiting = waiting.enqueue(f))
+  def enqueue(f: F): RateLimiterQueue[F] = copy(waiting = waiting.enqueue(f))
 
   /**
     * Before invoking a scheduled `run`, clear the scheduled flag.
@@ -57,10 +57,10 @@ case class RateLimiterQueue[F[_]](maxRuns: Int, perMillis: Long, lastTimestamps:
 }
 
 object RateLimiterQueue {
-  def apply[F[_]](maxRuns: Int, perMillis: Long): RateLimiterQueue[F] =
+  def apply[F](maxRuns: Int, perMillis: Long): RateLimiterQueue[F] =
     RateLimiterQueue[F](maxRuns, perMillis, Queue.empty, Queue.empty, scheduled = false)
 
-  sealed trait RateLimiterTask[F[_]]
-  case class Run[F[_]](run: F[Unit]) extends RateLimiterTask[F]
-  case class RunAfter[F[_]](millis: Long) extends RateLimiterTask[F]
+  sealed trait RateLimiterTask[F]
+  case class Run[F](run: F) extends RateLimiterTask[F]
+  case class RunAfter[F](millis: Long) extends RateLimiterTask[F]
 }

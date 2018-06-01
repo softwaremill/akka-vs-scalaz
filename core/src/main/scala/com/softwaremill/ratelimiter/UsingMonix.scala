@@ -3,7 +3,6 @@ package com.softwaremill.ratelimiter
 import cats.effect.Fiber
 import monix.eval.{MVar, Task}
 
-import scala.collection.immutable.Queue
 import scala.concurrent.duration._
 import cats.implicits._
 import RateLimiterQueue._
@@ -28,11 +27,11 @@ object UsingMonix {
     def create(maxRuns: Int, per: FiniteDuration): Task[MonixRateLimiter] =
       for {
         queue <- MVar.empty[RateLimiterMsg]
-        data <- MVar(RateLimiterQueue[Task](maxRuns, per.toMillis))
+        data <- MVar(RateLimiterQueue[Task[Unit]](maxRuns, per.toMillis))
         runQueueFiber <- runQueue(data, queue)
       } yield new MonixRateLimiter(queue, runQueueFiber)
 
-    private def runQueue(data: MVar[RateLimiterQueue[Task]], queue: MVar[RateLimiterMsg]): Task[Fiber[Task, Unit]] = {
+    private def runQueue(data: MVar[RateLimiterQueue[Task[Unit]]], queue: MVar[RateLimiterMsg]): Task[Fiber[Task, Unit]] = {
       queue.take
         .flatMap {
           case ScheduledRunQueue =>

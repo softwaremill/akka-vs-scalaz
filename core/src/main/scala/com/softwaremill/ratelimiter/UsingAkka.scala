@@ -3,7 +3,6 @@ package com.softwaremill.ratelimiter
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, PoisonPill, Props}
 import com.softwaremill.ratelimiter.RateLimiterQueue._
 
-import scala.collection.immutable.Queue
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, Promise}
 
@@ -34,7 +33,7 @@ object UsingAkka {
     private var queue = RateLimiterQueue[LazyFuture](maxRuns, per.toMillis)
 
     override def receive: Receive = {
-      case lf: LazyFuture[Unit] =>
+      case lf: LazyFuture =>
         queue = queue.enqueue(lf)
         runQueue()
 
@@ -59,6 +58,6 @@ object UsingAkka {
     }
   }
 
-  private case class LazyFuture[T](t: () => Future[T])
+  private case class LazyFuture(t: () => Future[Unit])
   private case object ScheduledRunQueue
 }

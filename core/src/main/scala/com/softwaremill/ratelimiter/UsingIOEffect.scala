@@ -4,7 +4,6 @@ import scalaz._
 import Scalaz._
 import scalaz.ioeffect.{Fiber, IO, IORef, Promise, Void}
 
-import scala.collection.immutable.Queue
 import scala.concurrent.duration._
 import RateLimiterQueue._
 import com.typesafe.scalalogging.StrictLogging
@@ -26,7 +25,7 @@ object UsingIOEffect {
   }
 
   object IOEffectRateLimiter extends StrictLogging {
-    type IORateLimiterQueue = RateLimiterQueue[IO[Void, ?]]
+    type IORateLimiterQueue = RateLimiterQueue[IO[Void, Unit]]
 
     def create(maxRuns: Int, per: FiniteDuration): IO[Void, IOEffectRateLimiter] =
       for {

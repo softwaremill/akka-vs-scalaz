@@ -1,11 +1,10 @@
 package com.softwaremill.ratelimiter
 
 import akka.actor.typed.scaladsl.{Behaviors, TimerScheduler}
-import akka.actor.typed.{ActorSystem, Behavior, Terminated}
+import akka.actor.typed.{ActorSystem, Behavior}
 import com.softwaremill.ratelimiter.RateLimiterQueue.{Run, RunAfter}
 import com.typesafe.scalalogging.StrictLogging
 
-import scala.collection.immutable.Queue
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, Promise}
 
@@ -36,8 +35,8 @@ object UsingAkkaTyped {
 
     private def rateLimit(timer: TimerScheduler[RateLimiterMsg], data: RateLimiterQueue[LazyFuture]): Behavior[RateLimiterMsg] =
       Behaviors.receiveMessage {
-        case lf: LazyFuture[Unit] => rateLimit(timer, runQueue(timer, data.enqueue(lf)))
-        case ScheduledRunQueue    => rateLimit(timer, runQueue(timer, data.notScheduled))
+        case lf: LazyFuture    => rateLimit(timer, runQueue(timer, data.enqueue(lf)))
+        case ScheduledRunQueue => rateLimit(timer, runQueue(timer, data.notScheduled))
       }
 
     private def runQueue(timer: TimerScheduler[RateLimiterMsg], data: RateLimiterQueue[LazyFuture]): RateLimiterQueue[LazyFuture] = {
@@ -54,6 +53,6 @@ object UsingAkkaTyped {
   }
 
   private sealed trait RateLimiterMsg
-  private case class LazyFuture[T](t: () => Future[T]) extends RateLimiterMsg
+  private case class LazyFuture(t: () => Future[Unit]) extends RateLimiterMsg
   private case object ScheduledRunQueue extends RateLimiterMsg
 }
