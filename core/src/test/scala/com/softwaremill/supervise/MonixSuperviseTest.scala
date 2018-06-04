@@ -40,6 +40,9 @@ class MonixSuperviseTest
       }
     } finally {
       broadcast.cancel()
+
+      // get a chance to see that the queue has closed
+      Thread.sleep(1000)
     }
   }
 }
