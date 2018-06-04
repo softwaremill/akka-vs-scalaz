@@ -4,12 +4,15 @@ import scala.collection.immutable.Queue
 import RateLimiterQueue._
 
 /**
-  * Queue of rate-limited. computations. The computations will be *started* so that at any time, there's at most
+  * Queue of rate-limited computations. The computations will be *started* so that at any time, there's at most
   * `maxRuns` in any time `perMillis` window.
   *
   * Note that this does not take into account the duration of the computations, when they end or when they reach
   * a remote server.
   *
+  * @param scheduled Is an invocation of `run` already scheduled (by returning an appropriate task in the previous
+  *                  invocation): used to prevent scheduling too much runs; it's enough if there's only one run
+  *                  scheduled at any given time.
   * @tparam F Type of computations. Should be a lazy wrapper, so that computations can be enqueued for later execution.
   */
 case class RateLimiterQueue[F](maxRuns: Int, perMillis: Long, lastTimestamps: Queue[Long], waiting: Queue[F], scheduled: Boolean) {
@@ -50,6 +53,10 @@ case class RateLimiterQueue[F](maxRuns: Int, perMillis: Long, lastTimestamps: Qu
     }
   }
 
+  /**
+    * Remove timestamps which are outside of the current time window, that is timestamps which are further from `now`
+    * than `timeMillis`.
+    */
   private def pruneTimestamps(now: Long): RateLimiterQueue[F] = {
     val threshold = now - perMillis
     copy(lastTimestamps = lastTimestamps.filter(_ >= threshold))

@@ -3,7 +3,7 @@ package com.softwaremill.crawler
 trait CrawlerTestData {
 
   trait TestDataSet {
-    def expectedCounts: Map[Domain, Int]
+    def expectedCounts: Map[Host, Int]
     def parseLinks: String => List[Url]
     def http: Url => String
     def startingUrl: Url
@@ -33,7 +33,7 @@ trait CrawlerTestData {
       case "body41" => Nil
     }
 
-    override val http: Url => Domain = {
+    override val http: Url => Host = {
       case Url("d1", "p1") => "body11"
       case Url("d1", "p2") => "body12"
       case Url("d1", "p3") => "body13"
@@ -70,7 +70,7 @@ trait CrawlerTestData {
 
     override val name = "multiple domain chain"
 
-    override val expectedCounts: Map[Domain, Int] = (1 to count).map { i =>
+    override val expectedCounts: Map[Host, Int] = (1 to count).map { i =>
       i.toString -> 1
     }.toMap
 
@@ -79,7 +79,7 @@ trait CrawlerTestData {
       if (i < count) List(Url((i + 1).toString, "p")) else Nil
     }
 
-    override val http: Url => Domain = _.domain
+    override val http: Url => Host = _.host
 
     override val startingUrl = Url("0", "p")
   }
@@ -89,7 +89,7 @@ trait CrawlerTestData {
 
     override val name = "dense links"
 
-    override val expectedCounts: Map[Domain, Int] = Map("d" -> count * count)
+    override val expectedCounts: Map[Host, Int] = Map("d" -> count * count)
 
     val links: List[Url] = (1 to count).map(i => Url("d", i.toString)).toList
 
@@ -97,7 +97,7 @@ trait CrawlerTestData {
       links
     }
 
-    override val http: Url => Domain = _.domain
+    override val http: Url => Host = _.host
 
     override val startingUrl = Url("d", "1")
   }
@@ -131,7 +131,7 @@ trait CrawlerTestData {
 
     override val name = "dense links (timed)"
 
-    override val expectedCounts: Map[Domain, Int] = (1 to count).map { i =>
+    override val expectedCounts: Map[Host, Int] = (1 to count).map { i =>
       i.toString -> count
     }.toMap
 
@@ -143,7 +143,7 @@ trait CrawlerTestData {
 
     override val http: Url => String = { url =>
       Thread.sleep(100)
-      url.domain
+      url.host
     }
 
     override val startingUrl = Url("1", "p")
