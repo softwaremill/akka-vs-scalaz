@@ -2,7 +2,7 @@ package com.softwaremill.ratelimiter
 
 import scalaz._
 import Scalaz._
-import scalaz.ioeffect.{Fiber, IO, IORef, Promise, Void}
+import scalaz.ioeffect.{Fiber, IO, Promise, Void}
 
 import scala.concurrent.duration._
 import RateLimiterQueue._
@@ -25,49 +25,34 @@ object UsingIOEffect {
   }
 
   object IOEffectRateLimiter extends StrictLogging {
-    type IORateLimiterQueue = RateLimiterQueue[IO[Void, Unit]]
 
     def create(maxRuns: Int, per: FiniteDuration): IO[Void, IOEffectRateLimiter] =
       for {
         queue <- IOQueue.make[Void, RateLimiterMsg]
-        data <- IORef[Void, IORateLimiterQueue](RateLimiterQueue(maxRuns, per.toMillis))
-        runQueueFiber <- runQueue(data, queue)
+        runQueueFiber <- runQueue(RateLimiterQueue(maxRuns, per.toMillis), queue)
+          .ensuring(IO.sync(logger.info("Stopping rate limiter")))
+          .fork
       } yield new IOEffectRateLimiter(queue, runQueueFiber)
 
-    /*
-    why this works: the IORef is only modified when reading from the queue. Hence, there are no race conditions
-    to modify the ref data.
-
-    General pattern:
-    1 take from queue
-    2 read data
-    3 modify data, potentially writing to this or other queues
-    4 write data
-
-    Unlike in actors, where we have to be cautious not to modify the internal actor state concurrently - e.g. in a
-    future callback, here there's no such possibility.
-     */
-    private def runQueue(data: IORef[IORateLimiterQueue], queue: IOQueue[RateLimiterMsg]): IO[Void, Fiber[Void, Unit]] = {
+    private def runQueue(data: RateLimiterQueue[IO[Void, Unit]], queue: IOQueue[RateLimiterMsg]): IO[Void, Unit] = {
       queue.take
+        .map {
+          case ScheduledRunQueue => data.notScheduled
+          case Schedule(t)       => data.enqueue(t)
+        }
+        .map(_.run(System.currentTimeMillis()))
         .flatMap {
-          case ScheduledRunQueue => data.modify(_.notScheduled).toUnit
-          case Schedule(t)       => data.modify(_.enqueue(t)).toUnit
+          case (tasks, d) =>
+            tasks
+              .map {
+                case Run(run)         => run
+                case RunAfter(millis) => IO.sleep[Void](millis.millis).flatMap(_ => queue.offer(ScheduledRunQueue))
+              }
+              .map(_.fork[Void])
+              .sequence_
+              .map(_ => d)
         }
-        .flatMap { _ =>
-          data.modifyFold(_.run(System.currentTimeMillis()))
-        }
-        .flatMap { tasks =>
-          tasks
-            .map {
-              case Run(run)         => run
-              case RunAfter(millis) => IO.sleep[Void](millis.millis).flatMap(_ => queue.offer(ScheduledRunQueue))
-            }
-            .map(_.fork[Void])
-            .sequence_
-        }
-        .forever
-        .ensuring(IO.sync(logger.info("Stopping rate limiter")))
-        .fork
+        .flatMap(d => runQueue(d, queue))
     }
   }
 

@@ -27,41 +27,30 @@ object UsingMonix {
     def create(maxRuns: Int, per: FiniteDuration): Task[MonixRateLimiter] =
       for {
         queue <- MVar.empty[RateLimiterMsg]
-        data <- MVar(RateLimiterQueue[Task[Unit]](maxRuns, per.toMillis))
-        runQueueFiber <- runQueue(data, queue)
+        runQueueFiber <- runQueue(RateLimiterQueue[Task[Unit]](maxRuns, per.toMillis), queue)
+          .doOnCancel(Task.eval(logger.info("Stopping rate limiter")))
+          .fork
       } yield new MonixRateLimiter(queue, runQueueFiber)
 
-    private def runQueue(data: MVar[RateLimiterQueue[Task[Unit]]], queue: MVar[RateLimiterMsg]): Task[Fiber[Task, Unit]] = {
+    private def runQueue(data: RateLimiterQueue[Task[Unit]], queue: MVar[RateLimiterMsg]): Task[Unit] = {
       queue.take
+        .map {
+          case ScheduledRunQueue => data.notScheduled
+          case Schedule(t)       => data.enqueue(t)
+        }
+        .map(_.run(System.currentTimeMillis()))
         .flatMap {
-          case ScheduledRunQueue =>
-            // we can do take+put here safely because that's the only place where data is accessed
-            data.take
-              .map(d => d.notScheduled)
-              .flatMap(data.put)
-          case Schedule(t) =>
-            data.take
-              .map(_.enqueue(t))
-              .flatMap(data.put)
+          case (tasks, d) =>
+            tasks
+              .map {
+                case Run(run)         => run
+                case RunAfter(millis) => Task.sleep(millis.millis).flatMap(_ => queue.put(ScheduledRunQueue))
+              }
+              .map(_.forkAndForget)
+              .sequence_
+              .map(_ => d)
         }
-        .flatMap { _ =>
-          data.take.map(_.run(System.currentTimeMillis())).flatMap {
-            case (tasks, d) =>
-              data.put(d).map(_ => tasks)
-          }
-        }
-        .flatMap { tasks =>
-          tasks
-            .map {
-              case Run(run)         => run
-              case RunAfter(millis) => Task.sleep(millis.millis).flatMap(_ => queue.put(ScheduledRunQueue))
-            }
-            .map(_.forkAndForget)
-            .sequence_
-        }
-        .restartUntil(_ => false)
-        .doOnCancel(Task.eval(logger.info("Stopping rate limiter")))
-        .fork
+        .flatMap(d => runQueue(d, queue))
     }
   }
 
