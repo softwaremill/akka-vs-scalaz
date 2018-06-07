@@ -16,7 +16,6 @@ object UsingMonix extends StrictLogging {
           logger.info("[broadcast] queue consumer completed, restarting")
       }
       .restartUntil(_ => false)
-      .map(_ => logger.info("[broadcast] finished"))
   }
 
   def consume(connector: QueueConnector[Task], consumer: Consumer[String, Unit]): Task[Unit] = {

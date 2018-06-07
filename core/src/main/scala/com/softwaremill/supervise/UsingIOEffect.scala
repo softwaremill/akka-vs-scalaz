@@ -7,15 +7,12 @@ import scalaz.ioeffect.{IO, Void}
 object UsingIOEffect extends StrictLogging {
 
   def broadcast(connector: QueueConnector[IO[Throwable, ?]], consumer: String => IO[Throwable, Unit]): IO[Nothing, Unit] = {
-    consume(connector, consumer).attempt
-      .map {
-        case -\/(e) =>
-          logger.info("[broadcast] exception in queue consumer, restarting", e)
-        case \/-(()) =>
-          logger.info("[broadcast] queue consumer completed, restarting")
-      }
-      .forever
-      .map((_: Unit) => logger.info("[broadcast] finished"))
+    consume(connector, consumer).attempt.map {
+      case -\/(e) =>
+        logger.info("[broadcast] exception in queue consumer, restarting", e)
+      case \/-(()) =>
+        logger.info("[broadcast] queue consumer completed, restarting")
+    }.forever
   }
 
   def consume(connector: QueueConnector[IO[Throwable, ?]], consumer: String => IO[Throwable, Unit]): IO[Throwable, Unit] = {

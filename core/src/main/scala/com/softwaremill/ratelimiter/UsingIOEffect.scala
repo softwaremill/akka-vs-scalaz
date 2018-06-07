@@ -35,23 +35,33 @@ object UsingIOEffect {
       } yield new IOEffectRateLimiter(queue, runQueueFiber)
 
     private def runQueue(data: RateLimiterQueue[IO[Void, Unit]], queue: IOQueue[RateLimiterMsg]): IO[Void, Unit] = {
-      queue.take
+      queue
+      // (1) take a message from the queue (or wait until one is available)
+      .take
+      // (2) modify the data structure accordingly
         .map {
           case ScheduledRunQueue => data.notScheduled
           case Schedule(t)       => data.enqueue(t)
         }
+        // (3) run the rate limiter queue: obtain the rate-limiter-tasks to be run
         .map(_.run(System.currentTimeMillis()))
         .flatMap {
           case (tasks, d) =>
             tasks
+            // (4) convert each rate-limiter-task to an IO
               .map {
                 case Run(run)         => run
                 case RunAfter(millis) => IO.sleep[Void](millis.millis).flatMap(_ => queue.offer(ScheduledRunQueue))
               }
+              // (5) fork each converted IO so that it runs in the background
               .map(_.fork[Void])
+              // (6) sequence a list of IOs which spawn background fibers
+              // into one big IO which, when run, will spawn all of them
               .sequence_
               .map(_ => d)
         }
+        // (7) recursive call to handle the next message,
+        // using the updated data structure
         .flatMap(d => runQueue(d, queue))
     }
   }
