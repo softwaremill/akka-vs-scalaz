@@ -7,7 +7,7 @@ import scalaz.ioeffect.{Fiber, IO, Void}
 
 object UsingIOEffect extends StrictLogging {
 
-  def crawler(crawlUrl: Url, http: Http[IO[Throwable, ?]], parseLinks: String => List[Url]): IO[Void, Map[Host, Int]] = {
+  def crawl(crawlUrl: Url, http: Http[IO[Throwable, ?]], parseLinks: String => List[Url]): IO[Void, Map[Host, Int]] = {
 
     def crawler(crawlerQueue: IOQueue[CrawlerMessage], data: CrawlerData): IO[Void, Map[Host, Int]] = {
       def handleMessage(msg: CrawlerMessage, data: CrawlerData): IO[Void, CrawlerData] = msg match {
@@ -42,11 +42,11 @@ object UsingIOEffect extends StrictLogging {
           case None =>
             for {
               workerQueue <- IOQueue.make[Void, Url]
-              workerFiber <- worker(workerQueue, crawlerQueue)
+              _ <- worker(workerQueue, crawlerQueue)
             } yield {
-              (data.copy(workers = data.workers + (url -> WorkerData(workerQueue, workerFiber))), workerQueue)
+              (data.copy(workers = data.workers + (url -> workerQueue)), workerQueue)
             }
-          case Some(wd) => IO.now((data, wd.queue))
+          case Some(queue) => IO.now((data, queue))
         }
       }
 
@@ -91,8 +91,7 @@ object UsingIOEffect extends StrictLogging {
     IO.supervise(crawl, new RuntimeException)
   }
 
-  case class WorkerData(queue: IOQueue[Url], fiber: Fiber[Void, Unit])
-  case class CrawlerData(referenceCount: Map[Host, Int], visitedLinks: Set[Url], inProgress: Set[Url], workers: Map[Host, WorkerData])
+  case class CrawlerData(referenceCount: Map[Host, Int], visitedLinks: Set[Url], inProgress: Set[Url], workers: Map[Host, IOQueue[Url]])
 
   sealed trait CrawlerMessage
   case class Start(url: Url) extends CrawlerMessage

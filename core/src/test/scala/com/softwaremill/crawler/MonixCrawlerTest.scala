@@ -20,7 +20,7 @@ class MonixCrawlerTest extends FlatSpec with Matchers with CrawlerTestData with 
 
       val t = timed {
         UsingMonix
-          .crawler(startingUrl, url => Task(http(url)), parseLinks)
+          .crawl(startingUrl, url => Task(http(url)), parseLinks)
           .runAsync
           .futureValue should be(expectedCounts)
       }

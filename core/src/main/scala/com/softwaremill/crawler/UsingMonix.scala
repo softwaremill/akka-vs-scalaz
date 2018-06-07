@@ -8,7 +8,7 @@ import cats.implicits._
 
 object UsingMonix extends StrictLogging {
 
-  def crawler(crawlUrl: Url, http: Http[Task], parseLinks: String => List[Url]): Task[Map[Host, Int]] = {
+  def crawl(crawlUrl: Url, http: Http[Task], parseLinks: String => List[Url]): Task[Map[Host, Int]] = {
 
     def crawler(crawlerQueue: MQueue[CrawlerMessage], data: CrawlerData): Task[Map[Host, Int]] = {
       def handleMessage(msg: CrawlerMessage, data: CrawlerData): Task[CrawlerData] = msg match {
