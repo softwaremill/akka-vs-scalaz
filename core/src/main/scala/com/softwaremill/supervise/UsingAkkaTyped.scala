@@ -58,7 +58,7 @@ object UsingAkkaTyped {
   }.narrow[Nothing]
 
   /*
-  By default actors are stopped on errror: https://doc.akka.io/docs/akka/current/typed/fault-tolerance.html
+  By default actors are stopped on error: https://doc.akka.io/docs/akka/current/typed/fault-tolerance.html
   as opposed to normal actors, which are restarted (defaultDecider)
    */
 

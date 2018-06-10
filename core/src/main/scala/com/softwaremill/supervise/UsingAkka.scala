@@ -30,10 +30,9 @@ object UsingAkka {
 
     override def preStart(): Unit = {
       context.actorOf(Props(new ConsumeQueueActor(connector)))
-      // BackoffSupervisor, OneForOne etc.
     }
 
-    // optional - the default one works too
+    // optional - the default one is identical
     override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
       case _: ActorInitializationException => Stop
       case _: ActorKilledException         => Stop
@@ -78,7 +77,7 @@ object UsingAkka {
         log.info("[queue] receiving message")
         queue
           .read()
-          .pipeTo(self)
+          .pipeTo(self) // forward message to self
           .andThen { case Success(_) => self ! queue } // receive next message
 
       case msg: String =>
