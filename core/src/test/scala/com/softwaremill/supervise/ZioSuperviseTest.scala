@@ -29,23 +29,19 @@ class ZioSuperviseTest
 
     val t = for {
       br <- UsingZio.broadcast(testData.queueConnector)
-      _ <- br.inbox.offer(UsingZio.Subscribe(msg => IO.sync(receivedMessages.add(msg))))
-    } yield br.cancel
+      _ <- br.inbox.offer[Nothing](UsingZio.Subscribe(msg => IO.sync(receivedMessages.add(msg))))
+      _ <- IO
+        .sync {
+          eventually {
+            receivedMessages.asScala.toList.slice(0, 5) should be(List("msg1", "msg2", "msg3", "msg", "msg"))
 
-    val cancelBroadcast = unsafePerformIO(t)
+            testData.connectingWhileClosing.get() should be(false)
+            testData.connectingWithoutClosing.get() should be(false)
+          }
+        }
+        .ensuring(br.cancel)
+    } yield ()
 
-    try {
-      eventually {
-        receivedMessages.asScala.toList.slice(0, 5) should be(List("msg1", "msg2", "msg3", "msg", "msg"))
-
-        testData.connectingWhileClosing.get() should be(false)
-        testData.connectingWithoutClosing.get() should be(false)
-      }
-    } finally {
-      unsafePerformIOAsync[Nothing, Unit](cancelBroadcast)(_ => ())
-
-      // get a chance to see that the queue has closed
-      Thread.sleep(1000)
-    }
+    unsafePerformIO(t)
   }
 }
