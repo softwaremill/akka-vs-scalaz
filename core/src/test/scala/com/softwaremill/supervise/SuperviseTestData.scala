@@ -34,7 +34,7 @@ trait SuperviseTestData {
       val counter = new AtomicInteger()
 
       override def read(): F[String] = wrap {
-        Thread.sleep(100)
+        Thread.sleep(500) // delay 1st message so that consumers can subscribe
         counter.incrementAndGet() match {
           case 1 => "msg1"
           case _ => throw new RuntimeException("exception 1")

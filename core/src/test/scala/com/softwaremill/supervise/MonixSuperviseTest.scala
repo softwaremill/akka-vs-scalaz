@@ -3,9 +3,9 @@ package com.softwaremill.supervise
 import java.util.concurrent.ConcurrentLinkedQueue
 
 import monix.eval.Task
-import monix.reactive.Consumer
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 import org.scalatest.concurrent.{Eventually, IntegrationPatience, ScalaFutures}
+import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.JavaConverters._
@@ -27,9 +27,13 @@ class MonixSuperviseTest
     val testData = createTestData(WrapInMonixTask)
 
     val receivedMessages = new ConcurrentLinkedQueue[String]()
-    val consumer = Consumer.foreach(receivedMessages.add)
 
-    val broadcast = UsingMonix.broadcast(testData.queueConnector, consumer).runAsync
+    val t = for {
+      br <- UsingMonix.broadcast(testData.queueConnector)
+      _ <- br.inbox.put(UsingMonix.Subscribe(msg => Task.eval(receivedMessages.add(msg))))
+    } yield br.cancel
+
+    val cancelBroadcast = t.runSyncUnsafe(1.second)
 
     try {
       eventually {
@@ -39,7 +43,7 @@ class MonixSuperviseTest
         testData.connectingWithoutClosing.get() should be(false)
       }
     } finally {
-      broadcast.cancel()
+      cancelBroadcast.runAsync
 
       // get a chance to see that the queue has closed
       Thread.sleep(1000)
