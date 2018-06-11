@@ -1,29 +1,30 @@
 package com.softwaremill.crawler
 
 import com.typesafe.scalalogging.StrictLogging
-import scalaz._
-import Scalaz._
-import scalaz.ioeffect.{Fiber, IO, Void}
+import scalaz.effect.{Fiber, IO, IOQueue}
+import com.softwaremill.IOInstances._
+import cats.implicits._
 
-object UsingIOEffect extends StrictLogging {
+object UsingZio extends StrictLogging {
 
-  def crawl(crawlUrl: Url, http: Http[IO[Throwable, ?]], parseLinks: String => List[Url]): IO[Void, Map[Host, Int]] = {
+  def crawl(crawlUrl: Url, http: Http[IO[Throwable, ?]], parseLinks: String => List[Url]): IO[Nothing, Map[Host, Int]] = {
 
-    def crawler(crawlerQueue: IOQueue[CrawlerMessage], data: CrawlerData): IO[Void, Map[Host, Int]] = {
-      def handleMessage(msg: CrawlerMessage, data: CrawlerData): IO[Void, CrawlerData] = msg match {
+    def crawler(crawlerQueue: IOQueue[CrawlerMessage], data: CrawlerData): IO[Nothing, Map[Host, Int]] = {
+      def handleMessage(msg: CrawlerMessage, data: CrawlerData): IO[Nothing, CrawlerData] = msg match {
         case Start(url) =>
           crawlUrl(data, url)
 
         case CrawlResult(url, links) =>
           val data2 = data.copy(inProgress = data.inProgress - url)
 
-          links.foldlM(data2) { d => link =>
-            val d2 = d.copy(referenceCount = d.referenceCount.updated(link.host, d.referenceCount.getOrElse(link.host, 0) + 1))
-            crawlUrl(d2, link)
+          links.foldM(data2) {
+            case (d, link) =>
+              val d2 = d.copy(referenceCount = d.referenceCount.updated(link.host, d.referenceCount.getOrElse(link.host, 0) + 1))
+              crawlUrl(d2, link)
           }
       }
 
-      def crawlUrl(data: CrawlerData, url: Url): IO[Void, CrawlerData] = {
+      def crawlUrl(data: CrawlerData, url: Url): IO[Nothing, CrawlerData] = {
         if (!data.visitedLinks.contains(url)) {
           workerFor(data, url.host).flatMap {
             case (data2, workerQueue) =>
@@ -37,11 +38,11 @@ object UsingIOEffect extends StrictLogging {
         } else IO.now(data)
       }
 
-      def workerFor(data: CrawlerData, url: Host): IO[Void, (CrawlerData, IOQueue[Url])] = {
+      def workerFor(data: CrawlerData, url: Host): IO[Nothing, (CrawlerData, IOQueue[Url])] = {
         data.workers.get(url) match {
           case None =>
             for {
-              workerQueue <- IOQueue.make[Void, Url]
+              workerQueue <- IOQueue.make[Nothing, Url](32)
               _ <- worker(workerQueue, crawlerQueue)
             } yield {
               (data.copy(workers = data.workers + (url -> workerQueue)), workerQueue)
@@ -50,10 +51,10 @@ object UsingIOEffect extends StrictLogging {
         }
       }
 
-      crawlerQueue.take.flatMap { msg =>
+      crawlerQueue.take[Nothing].flatMap { msg =>
         handleMessage(msg, data).flatMap { data2 =>
           if (data2.inProgress.isEmpty) {
-            //data2.workers.values.map(_.fiber.interrupt[Void](new RuntimeException())).toList.sequence_.map(_ => data2.referenceCount)
+            //data2.workers.values.map(_.fiber.interrupt[Nothing](new RuntimeException())).toList.sequence_.map(_ => data2.referenceCount)
             IO.now(data2.referenceCount)
           } else {
             crawler(crawlerQueue, data2)
@@ -62,33 +63,34 @@ object UsingIOEffect extends StrictLogging {
       }
     }
 
-    def worker(workerQueue: IOQueue[Url], crawlerQueue: IOQueue[CrawlerMessage]): IO[Void, Fiber[Void, Unit]] = {
-      def handleUrl(url: Url): IO[Void, Unit] = {
+    def worker(workerQueue: IOQueue[Url], crawlerQueue: IOQueue[CrawlerMessage]): IO[Nothing, Fiber[Nothing, Unit]] = {
+      def handleUrl(url: Url): IO[Nothing, Unit] = {
         http
           .get(url)
-          .attempt
+          .attempt[Nothing]
           .map {
-            case -\/(t) =>
+            case Left(t) =>
               logger.error(s"Cannot get contents of $url", t)
               List.empty[Url]
-            case \/-(b) => parseLinks(b)
+            case Right(b) => parseLinks(b)
           }
           .flatMap(r => crawlerQueue.offer(CrawlResult(url, r)))
       }
 
-      workerQueue.take
+      workerQueue
+        .take[Nothing]
         .flatMap(handleUrl)
         .forever
         .fork
     }
 
     val crawl = for {
-      crawlerQueue <- IOQueue.make[Void, CrawlerMessage]
-      _ <- crawlerQueue.offer[Void](Start(crawlUrl))
+      crawlerQueue <- IOQueue.make[Nothing, CrawlerMessage](32)
+      _ <- crawlerQueue.offer[Nothing](Start(crawlUrl))
       r <- crawler(crawlerQueue, CrawlerData(Map(), Set(), Set(), Map()))
     } yield r
 
-    IO.supervise(crawl, new RuntimeException)
+    IO.supervise[Nothing, Map[Host, Int]](crawl, new RuntimeException)
   }
 
   case class CrawlerData(referenceCount: Map[Host, Int], visitedLinks: Set[Url], inProgress: Set[Url], workers: Map[Host, IOQueue[Url]])
@@ -96,13 +98,4 @@ object UsingIOEffect extends StrictLogging {
   sealed trait CrawlerMessage
   case class Start(url: Url) extends CrawlerMessage
   case class CrawlResult(url: Url, links: List[Url]) extends CrawlerMessage
-
-  // TODO not yet available
-  trait IOQueue[T] {
-    def take: IO[Void, T]
-    def offer[E](t: T): IO[E, Unit]
-  }
-  object IOQueue {
-    def make[E, T]: IO[E, IOQueue[T]] = ???
-  }
 }
