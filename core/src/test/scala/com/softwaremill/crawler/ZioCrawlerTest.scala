@@ -3,7 +3,7 @@ package com.softwaremill.crawler
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.time.{Millis, Seconds, Span}
 import org.scalatest.{FlatSpec, Matchers}
-import scalaz.effect.{IO, RTS}
+import scalaz.zio.{IO, RTS}
 
 class ZioCrawlerTest extends FlatSpec with Matchers with CrawlerTestData with ScalaFutures with IntegrationPatience with RTS {
 

@@ -1,6 +1,6 @@
 package com.softwaremill.ratelimiter
 
-import scalaz.effect.{Fiber, IO, IOQueue, Promise}
+import scalaz.zio.{Fiber, IO, IOQueue, Promise}
 
 import scala.concurrent.duration._
 import RateLimiterQueue._

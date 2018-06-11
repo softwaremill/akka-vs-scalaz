@@ -1,7 +1,7 @@
 package com.softwaremill.crawler
 
 import com.typesafe.scalalogging.StrictLogging
-import scalaz.effect.{Fiber, IO, IOQueue}
+import scalaz.zio.{Fiber, IO, IOQueue}
 import com.softwaremill.IOInstances._
 import cats.implicits._
 

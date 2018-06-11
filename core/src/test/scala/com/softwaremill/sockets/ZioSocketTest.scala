@@ -2,7 +2,7 @@ package com.softwaremill.sockets
 
 import org.scalatest.concurrent.IntegrationPatience
 import org.scalatest.{BeforeAndAfterAll, FlatSpec}
-import scalaz.effect.RTS
+import scalaz.zio.RTS
 
 class ZioSocketTest extends FlatSpec with SocketTest with BeforeAndAfterAll with IntegrationPatience with RTS {
 

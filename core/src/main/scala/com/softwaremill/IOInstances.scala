@@ -1,7 +1,7 @@
 package com.softwaremill
 
 import cats.Monad
-import scalaz.effect.IO
+import scalaz.zio.IO
 
 object IOInstances {
   implicit def ioMonad[E]: Monad[IO[E, ?]] = new Monad[IO[E, ?]] {

@@ -1,4 +1,4 @@
-lazy val commonSettings = commonSmlBuildSettings ++ ossPublishSettings ++ Seq(
+lazy val commonSettings = commonSmlBuildSettings ++ Seq(
   organization := "com.softwaremill",
   scalaVersion := "2.12.6"
 )
@@ -20,7 +20,7 @@ lazy val core: Project = (project in file("core"))
       "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-testkit" % akkaVersion % Test,
       "com.typesafe.akka" %% "akka-testkit-typed" % akkaVersion % Test,
-      "scalaz-effect" %% "scalaz-effect" % "0.1.0-SNAPSHOT",
+      "org.scalaz" %% "scalaz-zio" % "0.1-SNAPSHOT",
       "io.monix" %% "monix" % "3.0.0-RC1",
       "ch.qos.logback" % "logback-classic" % "1.2.3",
       "com.typesafe.scala-logging" %% "scala-logging" % "3.9.0",

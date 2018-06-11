@@ -1,7 +1,7 @@
 package com.softwaremill.sockets
 
 import com.typesafe.scalalogging.StrictLogging
-import scalaz.effect.{Fiber, IO, IOQueue}
+import scalaz.zio.{Fiber, IO, IOQueue}
 import cats.implicits._
 import com.softwaremill.IOInstances._
 

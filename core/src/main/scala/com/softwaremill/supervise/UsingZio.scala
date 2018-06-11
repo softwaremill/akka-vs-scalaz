@@ -1,7 +1,7 @@
 package com.softwaremill.supervise
 
 import com.typesafe.scalalogging.StrictLogging
-import scalaz.effect.{IO, IOQueue}
+import scalaz.zio.{IO, IOQueue}
 import cats.implicits._
 import com.softwaremill.IOInstances._
 

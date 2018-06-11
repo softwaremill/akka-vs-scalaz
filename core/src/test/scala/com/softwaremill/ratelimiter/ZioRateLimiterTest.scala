@@ -1,7 +1,7 @@
 package com.softwaremill.ratelimiter
 
 import org.scalatest.concurrent.IntegrationPatience
-import scalaz.effect.{IO, RTS}
+import scalaz.zio.{IO, RTS}
 
 class ZioRateLimiterTest extends RateLimiterTest with IntegrationPatience {
 
