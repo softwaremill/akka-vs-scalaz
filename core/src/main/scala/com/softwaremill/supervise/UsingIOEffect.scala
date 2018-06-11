@@ -42,7 +42,7 @@ object UsingIOEffect extends StrictLogging {
   }
 
   def consume(connector: QueueConnector[IO[Throwable, ?]], inbox: IOQueue[BroadcastMessage]): IO[Throwable, Unit] = {
-    val connect = IO
+    val connect: IO[Throwable, Queue[IO[Throwable, ?]]] = IO
       .syncThrowable(logger.info("[queue-start] connecting"))
       .flatMap(_ => connector.connect)
       .map { q =>

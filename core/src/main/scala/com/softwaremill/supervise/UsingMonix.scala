@@ -43,7 +43,7 @@ object UsingMonix extends StrictLogging {
   }
 
   def consume(connector: QueueConnector[Task], inbox: MVar[BroadcastMessage]): Task[Unit] = {
-    val connect = Task
+    val connect: Task[Queue[Task]] = Task
       .eval(logger.info("[queue-start] connecting"))
       .flatMap(_ => connector.connect)
       .map { q =>
@@ -51,7 +51,7 @@ object UsingMonix extends StrictLogging {
         q
       }
 
-    def consumeQueue(queue: Queue[Task]) =
+    def consumeQueue(queue: Queue[Task]): Task[Unit] =
       Task
         .eval(logger.info("[queue] receiving message"))
         .flatMap(_ => queue.read())
@@ -59,7 +59,7 @@ object UsingMonix extends StrictLogging {
         .cancelable
         .restartUntil(_ => false)
 
-    def releaseQueue(queue: Queue[Task]) =
+    def releaseQueue(queue: Queue[Task]): Task[Unit] =
       Task
         .eval(logger.info("[queue-stop] closing"))
         .flatMap(_ => queue.close())
