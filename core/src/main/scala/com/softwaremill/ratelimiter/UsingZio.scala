@@ -9,7 +9,7 @@ import cats.implicits._
 import com.softwaremill.IOInstances._
 
 object UsingZio {
-  class IOEffectRateLimiter(queue: IOQueue[RateLimiterMsg], runQueueFiber: Fiber[Nothing, Unit]) {
+  class ZioRateLimiter(queue: IOQueue[RateLimiterMsg], runQueueFiber: Fiber[Nothing, Unit]) {
     def runLimited[E, T](f: IO[E, T]): IO[E, T] = {
       for {
         p <- Promise.make[E, T]
@@ -24,15 +24,15 @@ object UsingZio {
     }
   }
 
-  object IOEffectRateLimiter extends StrictLogging {
+  object ZioRateLimiter extends StrictLogging {
 
-    def create(maxRuns: Int, per: FiniteDuration): IO[Nothing, IOEffectRateLimiter] =
+    def create(maxRuns: Int, per: FiniteDuration): IO[Nothing, ZioRateLimiter] =
       for {
         queue <- IOQueue.make[Nothing, RateLimiterMsg](32)
         runQueueFiber <- runQueue(RateLimiterQueue(maxRuns, per.toMillis), queue)
           .ensuring(IO.sync(logger.info("Stopping rate limiter")))
           .fork
-      } yield new IOEffectRateLimiter(queue, runQueueFiber)
+      } yield new ZioRateLimiter(queue, runQueueFiber)
 
     private def runQueue(data: RateLimiterQueue[IO[Nothing, Unit]], queue: IOQueue[RateLimiterMsg]): IO[Nothing, Unit] = {
       queue
