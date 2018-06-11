@@ -14,5 +14,7 @@ object IOInstances {
       }
 
     override def pure[A](x: A): IO[E, A] = IO.point(x)
+
+    override def map[A, B](fa: IO[E, A])(f: A => B): IO[E, B] = fa.map(f)
   }
 }
