@@ -10,7 +10,7 @@ lazy val rootProject = (project in file("."))
   .settings(publishArtifact := false, name := "akka-vs-scalaz")
   .aggregate(core)
 
-lazy val akkaVersion = "2.5.12"
+lazy val akkaVersion = "2.5.13"
 
 lazy val core: Project = (project in file("core"))
   .settings(commonSettings: _*)
@@ -19,7 +19,7 @@ lazy val core: Project = (project in file("core"))
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-testkit" % akkaVersion % Test,
-      "com.typesafe.akka" %% "akka-testkit-typed" % akkaVersion % Test,
+      "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % Test,
       "org.scalaz" %% "scalaz-zio" % "0.1-SNAPSHOT",
       "io.monix" %% "monix" % "3.0.0-RC1",
       "ch.qos.logback" % "logback-classic" % "1.2.3",

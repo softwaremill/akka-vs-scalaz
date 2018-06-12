@@ -1,6 +1,6 @@
 package com.softwaremill.supervise
 
-import akka.testkit.typed.scaladsl.{ActorTestKit, TestProbe}
+import akka.actor.testkit.typed.scaladsl.{ActorTestKit, TestProbe}
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 

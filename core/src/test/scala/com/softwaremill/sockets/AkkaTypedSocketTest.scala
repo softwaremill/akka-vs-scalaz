@@ -1,6 +1,6 @@
 package com.softwaremill.sockets
 
-import akka.testkit.typed.scaladsl.ActorTestKit
+import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import org.scalatest.{BeforeAndAfterAll, FlatSpec}
 
 class AkkaTypedSocketTest extends FlatSpec with ActorTestKit with SocketTest with BeforeAndAfterAll {

@@ -1,6 +1,6 @@
 package com.softwaremill.crawler
 
-import akka.testkit.typed.scaladsl.{ActorTestKit, TestProbe}
+import akka.actor.testkit.typed.scaladsl.{ActorTestKit, TestProbe}
 import com.softwaremill.crawler.UsingAkkaTyped.Start
 
 import scala.concurrent.duration._
