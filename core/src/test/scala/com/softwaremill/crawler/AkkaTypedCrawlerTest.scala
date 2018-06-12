@@ -9,7 +9,7 @@ import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
-class TypedCrawlerTest extends FlatSpec with ActorTestKit with Matchers with BeforeAndAfterAll with CrawlerTestData {
+class AkkaTypedCrawlerTest extends FlatSpec with ActorTestKit with Matchers with BeforeAndAfterAll with CrawlerTestData {
 
   override def afterAll(): Unit = shutdownTestKit()
 
