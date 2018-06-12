@@ -38,14 +38,14 @@ object UsingZio extends StrictLogging {
         } else IO.now(data)
       }
 
-      def workerFor(data: CrawlerData, url: Host): IO[Nothing, (CrawlerData, IOQueue[Url])] = {
-        data.workers.get(url) match {
+      def workerFor(data: CrawlerData, host: Host): IO[Nothing, (CrawlerData, IOQueue[Url])] = {
+        data.workers.get(host) match {
           case None =>
             for {
               workerQueue <- IOQueue.make[Nothing, Url](32)
               _ <- worker(workerQueue, crawlerQueue)
             } yield {
-              (data.copy(workers = data.workers + (url -> workerQueue)), workerQueue)
+              (data.copy(workers = data.workers + (host -> workerQueue)), workerQueue)
             }
           case Some(queue) => IO.now((data, queue))
         }
@@ -74,7 +74,7 @@ object UsingZio extends StrictLogging {
               List.empty[Url]
             case Right(b) => parseLinks(b)
           }
-          .flatMap(r => crawlerQueue.offer(CrawlResult(url, r)))
+          .flatMap(r => crawlerQueue.offer(CrawlResult(url, r)).fork[Nothing].toUnit)
       }
 
       workerQueue

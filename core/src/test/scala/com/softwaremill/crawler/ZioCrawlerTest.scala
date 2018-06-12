@@ -13,8 +13,7 @@ class ZioCrawlerTest extends FlatSpec with Matchers with CrawlerTestData with Sc
       interval = scaled(Span(150, Millis))
     )
 
-  // Zio currently hangs on the DenseLinks test
-  for (testData <- testDataSets.filterNot(_ == DenseLinks)) {
+  for (testData <- testDataSets) {
     it should s"crawl a test data set ${testData.name}" in {
       import testData._
 

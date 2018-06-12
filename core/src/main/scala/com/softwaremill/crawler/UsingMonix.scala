@@ -39,12 +39,12 @@ object UsingMonix extends StrictLogging {
         } else Task.now(data)
       }
 
-      def workerFor(data: CrawlerData, url: Host): Task[(CrawlerData, MQueue[Url])] = {
-        data.workers.get(url) match {
+      def workerFor(data: CrawlerData, host: Host): Task[(CrawlerData, MQueue[Url])] = {
+        data.workers.get(host) match {
           case None =>
             val workerQueue = MQueue.make[Url]
             worker(workerQueue, crawlerQueue).map { workerFiber =>
-              (data.copy(workers = data.workers + (url -> WorkerData(workerQueue, workerFiber))), workerQueue)
+              (data.copy(workers = data.workers + (host -> WorkerData(workerQueue, workerFiber))), workerQueue)
             }
           case Some(wd) => Task.now((data, wd.queue))
         }
