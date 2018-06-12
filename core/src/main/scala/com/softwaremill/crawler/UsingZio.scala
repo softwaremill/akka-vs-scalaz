@@ -54,7 +54,6 @@ object UsingZio extends StrictLogging {
       crawlerQueue.take[Nothing].flatMap { msg =>
         handleMessage(msg, data).flatMap { data2 =>
           if (data2.inProgress.isEmpty) {
-            //data2.workers.values.map(_.fiber.interrupt[Nothing](new RuntimeException())).toList.sequence_.map(_ => data2.referenceCount)
             IO.now(data2.referenceCount)
           } else {
             crawler(crawlerQueue, data2)
