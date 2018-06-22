@@ -4,7 +4,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 
 import org.scalatest.concurrent.{Eventually, IntegrationPatience, ScalaFutures}
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
-import scalaz.zio.{IO, RTS}
+import scalaz.zio.{ExitResult, IO, RTS}
 
 import scala.collection.JavaConverters._
 
@@ -29,7 +29,7 @@ class ZioSuperviseTest
 
     val t = for {
       br <- UsingZio.broadcast(testData.queueConnector)
-      _ <- br.inbox.offer[Nothing](UsingZio.Subscribe(msg => IO.sync(receivedMessages.add(msg))))
+      _ <- br.inbox.offer(UsingZio.Subscribe(msg => IO.sync(receivedMessages.add(msg))))
       _ <- IO
         .sync {
           eventually {
