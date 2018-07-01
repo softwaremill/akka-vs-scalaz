@@ -4,7 +4,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 
 import org.scalatest.concurrent.{Eventually, IntegrationPatience, ScalaFutures}
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
-import scalaz.zio.{ExitResult, IO, RTS}
+import scalaz.zio.{IO, RTS}
 
 import scala.collection.JavaConverters._
 
