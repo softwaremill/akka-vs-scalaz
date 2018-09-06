@@ -42,6 +42,6 @@ class ZioSuperviseTest
         .ensuring(br.cancel)
     } yield ()
 
-    unsafePerformIO(t)
+    unsafeRun(t)
   }
 }

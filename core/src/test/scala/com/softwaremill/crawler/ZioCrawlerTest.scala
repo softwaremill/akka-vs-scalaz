@@ -18,7 +18,7 @@ class ZioCrawlerTest extends FlatSpec with Matchers with CrawlerTestData with Sc
       import testData._
 
       val t = timed {
-        unsafePerformIO(UsingZio.crawl(startingUrl, url => IO.syncThrowable(http(url)), parseLinks)) should be(expectedCounts)
+        unsafeRun(UsingZio.crawl(startingUrl, url => IO.syncThrowable(http(url)), parseLinks)) should be(expectedCounts)
       }
 
       shouldTakeMillisMin.foreach(m => t should be >= (m))

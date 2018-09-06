@@ -1,16 +1,16 @@
 package com.softwaremill.crawler
 
 import com.typesafe.scalalogging.StrictLogging
-import scalaz.zio.{Fiber, IO, IOQueue}
+import scalaz.zio.{Fiber, IO, Queue}
 import com.softwaremill.IOInstances._
 import cats.implicits._
 
 object UsingZio extends StrictLogging {
 
-  def crawl(crawlUrl: Url, http: Http[IO[Throwable, ?]], parseLinks: String => List[Url]): IO[Void, Map[Host, Int]] = {
+  def crawl(crawlUrl: Url, http: Http[IO[Throwable, ?]], parseLinks: String => List[Url]): IO[Nothing, Map[Host, Int]] = {
 
-    def crawler(crawlerQueue: IOQueue[CrawlerMessage], data: CrawlerData): IO[Void, Map[Host, Int]] = {
-      def handleMessage(msg: CrawlerMessage, data: CrawlerData): IO[Void, CrawlerData] = msg match {
+    def crawler(crawlerQueue: Queue[CrawlerMessage], data: CrawlerData): IO[Nothing, Map[Host, Int]] = {
+      def handleMessage(msg: CrawlerMessage, data: CrawlerData): IO[Nothing, CrawlerData] = msg match {
         case Start(url) =>
           crawlUrl(data, url)
 
@@ -24,7 +24,7 @@ object UsingZio extends StrictLogging {
           }
       }
 
-      def crawlUrl(data: CrawlerData, url: Url): IO[Void, CrawlerData] = {
+      def crawlUrl(data: CrawlerData, url: Url): IO[Nothing, CrawlerData] = {
         if (!data.visitedLinks.contains(url)) {
           workerFor(data, url.host).flatMap {
             case (data2, workerQueue) =>
@@ -38,11 +38,11 @@ object UsingZio extends StrictLogging {
         } else IO.now(data)
       }
 
-      def workerFor(data: CrawlerData, host: Host): IO[Void, (CrawlerData, IOQueue[Url])] = {
+      def workerFor(data: CrawlerData, host: Host): IO[Nothing, (CrawlerData, Queue[Url])] = {
         data.workers.get(host) match {
           case None =>
             for {
-              workerQueue <- IOQueue.make[Void, Url](32)
+              workerQueue <- Queue.bounded[Url](32)
               _ <- worker(workerQueue, crawlerQueue)
             } yield {
               (data.copy(workers = data.workers + (host -> workerQueue)), workerQueue)
@@ -51,7 +51,7 @@ object UsingZio extends StrictLogging {
         }
       }
 
-      crawlerQueue.take[Void].flatMap { msg =>
+      crawlerQueue.take.flatMap { msg =>
         handleMessage(msg, data).flatMap { data2 =>
           if (data2.inProgress.isEmpty) {
             IO.now(data2.referenceCount)
@@ -62,8 +62,8 @@ object UsingZio extends StrictLogging {
       }
     }
 
-    def worker(workerQueue: IOQueue[Url], crawlerQueue: IOQueue[CrawlerMessage]): IO[Void, Fiber[Void, Unit]] = {
-      def handleUrl(url: Url): IO[Void, Unit] = {
+    def worker(workerQueue: Queue[Url], crawlerQueue: Queue[CrawlerMessage]): IO[Nothing, Fiber[Nothing, Unit]] = {
+      def handleUrl(url: Url): IO[Nothing, Unit] = {
         http
           .get(url)
           .attempt
@@ -73,26 +73,26 @@ object UsingZio extends StrictLogging {
               List.empty[Url]
             case Right(b) => parseLinks(b)
           }
-          .flatMap(r => crawlerQueue.offer(CrawlResult(url, r)).fork[Void].toUnit)
+          .flatMap(r => crawlerQueue.offer(CrawlResult(url, r)).fork.void)
       }
 
       workerQueue
-        .take[Void]
+        .take
         .flatMap(handleUrl)
         .forever
         .fork
     }
 
     val crawl = for {
-      crawlerQueue <- IOQueue.make[Void, CrawlerMessage](32)
-      _ <- crawlerQueue.offer[Void](Start(crawlUrl))
+      crawlerQueue <- Queue.bounded[CrawlerMessage](32)
+      _ <- crawlerQueue.offer(Start(crawlUrl))
       r <- crawler(crawlerQueue, CrawlerData(Map(), Set(), Set(), Map()))
     } yield r
 
-    IO.supervise(crawl, new RuntimeException)
+    IO.supervise(crawl)
   }
 
-  case class CrawlerData(referenceCount: Map[Host, Int], visitedLinks: Set[Url], inProgress: Set[Url], workers: Map[Host, IOQueue[Url]])
+  case class CrawlerData(referenceCount: Map[Host, Int], visitedLinks: Set[Url], inProgress: Set[Url], workers: Map[Host, Queue[Url]])
 
   sealed trait CrawlerMessage
   case class Start(url: Url) extends CrawlerMessage
